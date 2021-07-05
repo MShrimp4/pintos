@@ -88,8 +88,11 @@ kernel.bin: kernel.o
 threads/loader.o: threads/loader.S
 	$(CC) -c $< -o $@ $(ASFLAGS) $(CPPFLAGS) $(DEFINES)
 
-loader.bin: threads/loader.o
-	$(LD) -N -e 0 -Ttext 0x7c00 --oformat binary -o $@ $<
+loader.elf: threads/loader.o
+	$(LD) -N -e 0 -Ttext 0x7c00 -o $@ $<
+
+loader.bin: loader.elf
+	$(OBJCOPY) -R .note.gnu.property -O binary $< $@
 
 os.dsk: kernel.bin
 	cat $^ > $@
@@ -99,7 +102,7 @@ clean::
 	rm -f threads/loader.o threads/kernel.lds.s threads/loader.d
 	rm -f kernel.bin.tmp
 	rm -f kernel.o kernel.lds.s
-	rm -f kernel.bin loader.bin
+	rm -f kernel.bin loader.elf loader.bin
 	rm -f bochsout.txt bochsrc.txt
 	rm -f results grade
 

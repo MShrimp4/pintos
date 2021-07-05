@@ -4,6 +4,8 @@
 /* GCC lets us add "attributes" to functions, function
    parameters, etc. to indicate their properties.
    See the GCC manual for details. */
+#define MALLOC(DEALLOC) __attribute__ ((malloc, malloc (DEALLOC)))
+#define CONST __attribute__ ((const))
 #define UNUSED __attribute__ ((unused))
 #define NO_RETURN __attribute__ ((noreturn))
 #define NO_INLINE __attribute__ ((noinline))

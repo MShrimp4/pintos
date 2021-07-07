@@ -4,6 +4,7 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include <ffloat.h>
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -347,8 +348,9 @@ thread_get_priority (void)
 
 /* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice (int nice UNUSED) 
+thread_set_nice (int nice) 
 {
+  thread_current ()->nice = nice;
   /* Not yet implemented. */
 }
 
@@ -356,8 +358,9 @@ thread_set_nice (int nice UNUSED)
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  struct thread *t = thread_current ();
+  ASSERT_CLAMP (t->nice, -20, 20);
+  return t->nice;
 }
 
 /* Returns 100 times the system load average. */
@@ -454,7 +457,7 @@ init_thread (struct thread *t, const char *name, int priority)
   enum intr_level old_level;
 
   ASSERT (t != NULL);
-  ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
+  ASSERT_CLAMP (priority, PRI_MIN, PRI_MAX);
   ASSERT (name != NULL);
 
   memset (t, 0, sizeof *t);
@@ -462,6 +465,10 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  if (running_thread () == t) /* initial thread */
+    t->nice = 0;
+  else
+    t->nice = running_thread ()->nice;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();

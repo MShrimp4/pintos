@@ -34,8 +34,12 @@ void debug_backtrace_all (void);
         if (CONDITION) { } else {                               \
                 PANIC ("assertion `%s' failed.", #CONDITION);   \
         }
+#define ASSERT_CLAMP(VAL, MIN, MAX) _assert_clamp (VAL, MIN, MAX)
+int _assert_clamp (int val, int min, int max);
 #define NOT_REACHED() PANIC ("executed an unreachable statement");
+
 #else
 #define ASSERT(CONDITION) ((void) 0)
+#define ASSERT_CLAMP(VAL, MIN, MAX) (VAL)
 #define NOT_REACHED() for (;;)
 #endif /* lib/debug.h */

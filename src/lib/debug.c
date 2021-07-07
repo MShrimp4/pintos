@@ -30,3 +30,14 @@ debug_backtrace (void)
               "of the Pintos documentation for more information.\n");
     }
 }
+
+
+
+/**/
+int
+_assert_clamp (int val, int min, int max)
+{
+  ASSERT (min <= val && val <= max);
+
+  return val;
+}

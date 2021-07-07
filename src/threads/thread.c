@@ -4,13 +4,13 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
-#include <ffloat.h>
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
 #include "threads/palloc.h"
 #include "threads/switch.h"
 #include "threads/synch.h"
+#include "devices/timer.h"
 #include "threads/vaddr.h"
 #ifdef USERPROG
 #include "userprog/process.h"
@@ -23,7 +23,7 @@
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
-static struct list ready_list;
+static struct list ready_list [64];
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -91,7 +91,8 @@ thread_init (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   lock_init (&tid_lock);
-  list_init (&ready_list);
+  for (int i=0;i<64;i++)
+    list_init (&ready_list[i]);
   list_init (&all_list);
 
   /* Set up a thread structure for the running thread. */
@@ -118,6 +119,28 @@ thread_start (void)
   sema_down (&idle_started);
 }
 
+void
+decay_recent_cpu (struct thread *t, ffloat *decay_factor)
+{
+  t->recent_cpu = f_add (f_mul (*decay_factor, t->recent_cpu), FFLOAT (t->nice));
+}
+
+void
+update_recent_cpu ()
+{
+  ffloat decay_factor;
+  struct thread *t = thread_current ();
+
+  t->recent_cpu = f_add (t->recent_cpu, FFLOAT (1));
+
+  if (timer_ticks() % TIMER_FREQ == 0)
+    {
+      decay_factor = f_div (FFLOAT (thread_get_load_avg ()*2 +1),
+                            FFLOAT (thread_get_load_avg ()*2));
+      thread_foreach (decay_recent_cpu, &decay_factor);
+    }
+}
+
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void
@@ -134,6 +157,8 @@ thread_tick (void)
 #endif
   else
     kernel_ticks++;
+
+  update_recent_cpu ();
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
@@ -351,6 +376,7 @@ void
 thread_set_nice (int nice) 
 {
   thread_current ()->nice = nice;
+  thread_yield ();
   /* Not yet implemented. */
 }
 
@@ -359,6 +385,7 @@ int
 thread_get_nice (void) 
 {
   struct thread *t = thread_current ();
+
   ASSERT_CLAMP (t->nice, -20, 20);
   return t->nice;
 }
@@ -368,15 +395,14 @@ int
 thread_get_load_avg (void) 
 {
   /* Not yet implemented. */
-  return 0;
+  return 3;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return F_TOINT (f_mul (thread_current ()->recent_cpu, FFLOAT (100)));
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -466,9 +492,15 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   if (running_thread () == t) /* initial thread */
-    t->nice = 0;
+    {
+      t->nice = 0;
+      t->recent_cpu = FFLOAT (0);
+    }
   else
-    t->nice = running_thread ()->nice;
+    {
+      t->nice = running_thread ()->nice;
+      t->recent_cpu = running_thread ()->recent_cpu;
+    }
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();

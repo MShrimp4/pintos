@@ -290,6 +290,7 @@ thread_wakemeupat (int64_t time)
   thread_current ()->wakeup_time = time;
   list_remove (&thread_current ()->elem);
   list_push_back (&sleep_list, &thread_current ()->elem);
+  ASSERT (!list_empty(&sleep_list));
   thread_block ();
   intr_set_level (old_level);
 }

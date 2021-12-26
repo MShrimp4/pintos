@@ -11,7 +11,7 @@ include ../../tests/Make.tests
 # Compiler and assembler options.
 kernel.bin: CPPFLAGS += -I$(SRCDIR)/lib/kernel
 
-# CPPFLAGS += -Werror=frame-larger-than=128
+CPPFLAGS += -Wframe-larger-than=128
 
 # Core kernel.
 threads_SRC  = threads/start.S		# Startup code.

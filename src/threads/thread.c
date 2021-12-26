@@ -66,6 +66,9 @@ bool thread_mlfqs;
 
 static void kernel_thread (thread_func *, void *aux);
 
+void decay_recent_cpu (struct thread *t, ffloat *decay_factor);
+void update_recent_cpu (void);
+
 static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
 static struct thread *next_thread_to_run (void);
@@ -142,7 +145,7 @@ update_recent_cpu ()
     {
       decay_factor = f_div (FFLOAT (thread_get_load_avg ()*2 +1),
                             FFLOAT (thread_get_load_avg ()*2));
-      thread_foreach (decay_recent_cpu, &decay_factor);
+      thread_foreach ((thread_action_func *) decay_recent_cpu, &decay_factor);
     }
 }
 

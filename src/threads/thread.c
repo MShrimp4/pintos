@@ -23,7 +23,11 @@
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
-static struct list ready_list [64];
+static struct list ready_list [PRI_MAX + 1];
+
+/* List of processes in THREAD_BLOCKED state.
+   It could be locked or just sleeping.*/
+static struct list blocked_list;
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -65,6 +69,7 @@ static void kernel_thread (thread_func *, void *aux);
 static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
 static struct thread *next_thread_to_run (void);
+static void thread_wakeup_sleepers (void);
 static void init_thread (struct thread *, const char *name, int priority);
 static bool is_thread (struct thread *) UNUSED;
 static void *alloc_frame (struct thread *, size_t size);
@@ -91,7 +96,7 @@ thread_init (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   lock_init (&tid_lock);
-  for (int i=0;i<64;i++)
+  for (int i=PRI_MIN;i<=PRI_MAX;i++)
     list_init (&ready_list[i]);
   list_init (&all_list);
 
@@ -242,6 +247,7 @@ thread_block (void)
   ASSERT (!intr_context ());
   ASSERT (intr_get_level () == INTR_OFF);
 
+  /* TODO: move to blocked_list */
   thread_current ()->status = THREAD_BLOCKED;
   schedule ();
 }
@@ -263,8 +269,24 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  ASSERT_CLAMP (t->priority, PRI_MIN, PRI_MAX);
+  list_push_back (&ready_list[t->priority], &t->elem);
   t->status = THREAD_READY;
+  intr_set_level (old_level);
+}
+
+/* TODO: doc this
+*/
+void
+thread_wakemeupat (int64_t time)
+{
+  enum intr_level old_level;
+
+  ASSERT (!intr_context ());
+
+  old_level = intr_disable ();
+  thread_current ()->wakeup_time = time;
+  thread_block ();
   intr_set_level (old_level);
 }
 
@@ -334,7 +356,10 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread)
-    list_push_back (&ready_list, &cur->elem);
+    {
+      ASSERT_CLAMP (cur->priority, PRI_MIN, PRI_MAX);
+      list_push_back (&ready_list[cur->priority], &cur->elem);
+    }
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -491,6 +516,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->wakeup_time = INT64_MAX; /* Wake me up when September ends */
   if (running_thread () == t) /* initial thread */
     {
       t->nice = 0;
@@ -521,6 +547,24 @@ alloc_frame (struct thread *t, size_t size)
   return t->stack;
 }
 
+/* Check wakeup time of sleepers and if the current time is
+   later than that, unblock one.*/
+static void
+thread_wakeup_sleepers (void)
+{
+  struct list_elem *e;
+  for (e = list_begin (&blocked_list); e != list_end (&blocked_list);
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, elem);
+      if (t->wakeup_time >= timer_ticks ())
+        {
+          t->wakeup_time = INT64_MAX;
+          thread_unblock (t);
+        }
+    }
+}
+
 /* Chooses and returns the next thread to be scheduled.  Should
    return a thread from the run queue, unless the run queue is
    empty.  (If the running thread can continue running, then it
@@ -529,10 +573,15 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void)
 {
-  if (list_empty (&ready_list))
-    return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  ASSERT (intr_get_level () == INTR_OFF);
+
+  thread_wakeup_sleepers ();
+
+  for (int i=PRI_MAX;i>=PRI_MIN;i--)
+    if (!list_empty (&ready_list[i]))
+      return list_entry (list_pop_front (&ready_list[i]), struct thread, elem);
+
+  return idle_thread;
 }
 
 /* Completes a thread switch by activating the new thread's page

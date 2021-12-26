@@ -102,6 +102,7 @@ thread_init (void)
   for (int i=PRI_MIN;i<=PRI_MAX;i++)
     list_init (&ready_list[i]);
   list_init (&all_list);
+  list_init (&sleep_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -556,15 +557,19 @@ alloc_frame (struct thread *t, size_t size)
 static void
 thread_wakeup_sleepers (void)
 {
-  struct list_elem *e;
-  for (e = list_begin (&sleep_list); e != list_end (&sleep_list);
-       e = list_next (e))
+  struct list_elem *e = list_begin (&sleep_list);
+  while (e != list_end (&sleep_list))
     {
       struct thread *t = list_entry (e, struct thread, elem);
       if (t->wakeup_time >= timer_ticks ())
         {
           t->wakeup_time = INT64_MAX;
+          e = list_remove (e);
           thread_unblock (t);
+        }
+      else
+        {
+          e = list_next (e);
         }
     }
 }

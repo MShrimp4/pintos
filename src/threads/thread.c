@@ -25,9 +25,9 @@
    that are ready to run but not actually running. */
 static struct list ready_list [PRI_MAX + 1];
 
-/* List of processes in THREAD_BLOCKED state.
-   It could be locked or just sleeping.*/
-static struct list blocked_list;
+/* List of processes sleeping.
+   Semaphores have their own queues.*/
+static struct list sleep_list;
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -247,7 +247,6 @@ thread_block (void)
   ASSERT (!intr_context ());
   ASSERT (intr_get_level () == INTR_OFF);
 
-  /* TODO: move to blocked_list */
   thread_current ()->status = THREAD_BLOCKED;
   schedule ();
 }
@@ -275,8 +274,7 @@ thread_unblock (struct thread *t)
   intr_set_level (old_level);
 }
 
-/* TODO: doc this
-*/
+/* Blocks the running thread until `time`. */
 void
 thread_wakemeupat (int64_t time)
 {
@@ -286,6 +284,8 @@ thread_wakemeupat (int64_t time)
 
   old_level = intr_disable ();
   thread_current ()->wakeup_time = time;
+  list_remove (&thread_current ()->elem);
+  list_push_back (&sleep_list, &thread_current ()->elem);
   thread_block ();
   intr_set_level (old_level);
 }
@@ -396,13 +396,14 @@ thread_get_priority (void)
   return thread_current ()->priority;
 }
 
-/* Sets the current thread's nice value to NICE. */
+/* Sets the current thread's nice value to NICE and
+   recalculate priority. */
 void
 thread_set_nice (int nice)
 {
+  thread_current ()->priority += 2 * (thread_current ()->nice - nice);
   thread_current ()->nice = nice;
   thread_yield ();
-  /* Not yet implemented. */
 }
 
 /* Returns the current thread's nice value. */
@@ -553,7 +554,7 @@ static void
 thread_wakeup_sleepers (void)
 {
   struct list_elem *e;
-  for (e = list_begin (&blocked_list); e != list_end (&blocked_list);
+  for (e = list_begin (&sleep_list); e != list_end (&sleep_list);
        e = list_next (e))
     {
       struct thread *t = list_entry (e, struct thread, elem);

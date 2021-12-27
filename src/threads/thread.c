@@ -142,6 +142,12 @@ update_pri (struct thread *t, void *none)
 {
   ASSERT (is_thread (t));
 
+  if (t == idle_thread)
+    {
+      t->priority = -1;
+      return;
+    }
+
   int old_pri = t->priority;
   int new_pri = PRI_MAX - (F_TOINT (t->recent_cpu) / 4) - (t->nice * 2);
   new_pri = new_pri < 0 ? 0 : new_pri;
@@ -158,7 +164,7 @@ update_pri (struct thread *t, void *none)
 
 void print_stat (struct thread *t, void *none)
 {
-  if (t->tid > 2)
+  if (t->tid != 2) /* Ignore IDLE */
     printf("[%lld]: %d(%s) PRI=%d, RCPU=%d\n",timer_ticks() , t->tid, t->name, t->priority, F_TOINT (t->recent_cpu));
 }
 
@@ -307,7 +313,8 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   ASSERT_CLAMP (t->priority, PRI_MIN, PRI_MAX);
-  list_push_back (&ready_list[t->priority], &t->elem);
+  if (t != idle_thread)
+    list_push_back (&ready_list[t->priority], &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -322,7 +329,6 @@ thread_wakemeupat (int64_t time)
 
   old_level = intr_disable ();
   thread_current ()->wakeup_time = time;
-  list_remove (&thread_current ()->elem);
   list_push_back (&sleep_list, &thread_current ()->elem);
   ASSERT (!list_empty(&sleep_list));
   thread_block ();
@@ -596,7 +602,7 @@ thread_wakeup_sleepers (void)
   while (e != list_end (&sleep_list))
     {
       struct thread *t = list_entry (e, struct thread, elem);
-      if (t->wakeup_time >= timer_ticks ())
+      if (t->wakeup_time <= timer_ticks ())
         {
           t->wakeup_time = INT64_MAX;
           e = list_remove (e);

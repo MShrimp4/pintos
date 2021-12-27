@@ -68,6 +68,7 @@ static void kernel_thread (thread_func *, void *aux);
 
 void decay_recent_cpu (struct thread *t, ffloat *decay_factor);
 void update_recent_cpu (void);
+void update_pri (struct thread *t, void *none UNUSED);
 
 static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
@@ -131,7 +132,34 @@ thread_start (void)
 void
 decay_recent_cpu (struct thread *t, ffloat *decay_factor)
 {
+  ASSERT (is_thread (t));
+
   t->recent_cpu = f_add (f_mul (*decay_factor, t->recent_cpu), FFLOAT (t->nice));
+}
+
+void
+update_pri (struct thread *t, void *none)
+{
+  ASSERT (is_thread (t));
+
+  int old_pri = t->priority;
+  int new_pri = PRI_MAX - (F_TOINT (t->recent_cpu) / 4) - (t->nice * 2);
+  new_pri = new_pri < 0 ? 0 : new_pri;
+
+  ASSERT_CLAMP (new_pri, PRI_MIN, PRI_MAX);
+
+  t->priority = new_pri;
+  if (old_pri != new_pri && t->status == THREAD_READY)
+    {
+      list_remove (&t->elem);
+      list_push_back (&ready_list[new_pri], &t->elem);
+    }
+}
+
+void print_stat (struct thread *t, void *none)
+{
+  if (t->tid > 2)
+    printf("[%lld]: %d(%s) PRI=%d, RCPU=%d\n",timer_ticks() , t->tid, t->name, t->priority, F_TOINT (t->recent_cpu));
 }
 
 void
@@ -141,6 +169,12 @@ update_recent_cpu ()
   struct thread *t = thread_current ();
 
   t->recent_cpu = f_add (t->recent_cpu, FFLOAT (1));
+
+  if (timer_ticks() % 4 == 0)
+    {
+      thread_foreach ((thread_action_func *) print_stat, NULL);
+      thread_foreach ((thread_action_func *) update_pri, NULL);
+    }
 
   if (timer_ticks() % TIMER_FREQ == 0)
     {

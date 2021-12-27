@@ -50,6 +50,10 @@ struct kernel_thread_frame
     void *aux;                  /* Auxiliary data for function. */
   };
 
+/* TODO */
+static ffloat load_avg;
+static int    ready_threads;
+
 /* Statistics. */
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
@@ -106,6 +110,7 @@ thread_init (void)
   list_init (&sleep_list);
 
   /* Set up a thread structure for the running thread. */
+  ready_threads = 1;
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
@@ -151,6 +156,7 @@ update_pri (struct thread *t, void *none)
   int old_pri = t->priority;
   int new_pri = PRI_MAX - (F_TOINT (t->recent_cpu) / 4) - (t->nice * 2);
   new_pri = new_pri < 0 ? 0 : new_pri;
+  new_pri = new_pri > PRI_MAX ? PRI_MAX : new_pri;//TODO - CLAMP
 
   ASSERT_CLAMP (new_pri, PRI_MIN, PRI_MAX);
 
@@ -171,21 +177,23 @@ void print_stat (struct thread *t, void *none)
 void
 update_recent_cpu ()
 {
-  ffloat decay_factor;
+  ffloat decay_factor, avg_2;
   struct thread *t = thread_current ();
 
   t->recent_cpu = f_add (t->recent_cpu, FFLOAT (1));
 
   if (timer_ticks() % 4 == 0)
     {
-      thread_foreach ((thread_action_func *) print_stat, NULL);
+      //thread_foreach ((thread_action_func *) print_stat, NULL);
       thread_foreach ((thread_action_func *) update_pri, NULL);
     }
 
   if (timer_ticks() % TIMER_FREQ == 0)
     {
-      decay_factor = f_div (FFLOAT (thread_get_load_avg ()*2),
-                            FFLOAT (thread_get_load_avg ()*2 +1));
+      avg_2 = f_mul (load_avg, FFLOAT (2));
+        decay_factor = f_div (avg_2, f_add (avg_2, FFLOAT (1)));
+      load_avg     = f_add (f_mul (f_div (FFLOAT (59), FFLOAT (60)), load_avg),
+                            f_div (FFLOAT (ready_threads), FFLOAT (60)));
       thread_foreach ((thread_action_func *) decay_recent_cpu, &decay_factor);
     }
 }
@@ -315,6 +323,7 @@ thread_unblock (struct thread *t)
   ASSERT_CLAMP (t->priority, PRI_MIN, PRI_MAX);
   if (t != idle_thread)
     list_push_back (&ready_list[t->priority], &t->elem);
+  ready_threads++;
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -404,6 +413,7 @@ thread_yield (void)
     {
       ASSERT_CLAMP (cur->priority, PRI_MIN, PRI_MAX);
       list_push_back (&ready_list[cur->priority], &cur->elem);
+      ready_threads++;
     }
   cur->status = THREAD_READY;
   schedule ();
@@ -466,14 +476,15 @@ int
 thread_get_load_avg (void)
 {
   /* Not yet implemented. */
-  return 3;
+  return F_TOINT (f_round (f_mul (load_avg, FFLOAT (100))));
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void)
 {
-  return F_TOINT (f_mul (thread_current ()->recent_cpu, FFLOAT (100)));
+  return F_TOINT (f_round (f_mul (thread_current ()->recent_cpu,
+                                  FFLOAT (100))));
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -629,7 +640,10 @@ next_thread_to_run (void)
 
   for (int i=PRI_MAX;i>=PRI_MIN;i--)
     if (!list_empty (&ready_list[i]))
-      return list_entry (list_pop_front (&ready_list[i]), struct thread, elem);
+      {
+        ready_threads--;
+        return list_entry (list_pop_front (&ready_list[i]), struct thread, elem);
+      }
 
   return idle_thread;
 }

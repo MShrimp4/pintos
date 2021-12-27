@@ -1,6 +1,7 @@
 #ifndef __LIB_FFLOAT_H
 #define __LIB_FFLOAT_H
 
+#include <debug.h>
 #include <stdint.h>
 
 #define __FRAC_BIT__ 16384 //2^14

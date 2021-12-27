@@ -16,7 +16,7 @@ ffloat f_add (ffloat a, ffloat b);
 ffloat f_sub (ffloat a, ffloat b);
 ffloat f_round (ffloat a);
 
-#define FFLOAT(a)  ((ffloat) {(int32_t)a * __FRAC_BIT__})
+#define FFLOAT(a)  ((ffloat) {(int32_t)(a) * __FRAC_BIT__})
 #define F_TOINT(a) (a.__VAL__ / __FRAC_BIT__)
 
 #endif /* lib/ffloat.h */

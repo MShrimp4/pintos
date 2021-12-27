@@ -184,8 +184,8 @@ update_recent_cpu ()
 
   if (timer_ticks() % TIMER_FREQ == 0)
     {
-      decay_factor = f_div (FFLOAT (thread_get_load_avg ()*2 +1),
-                            FFLOAT (thread_get_load_avg ()*2));
+      decay_factor = f_div (FFLOAT (thread_get_load_avg ()*2),
+                            FFLOAT (thread_get_load_avg ()*2 +1));
       thread_foreach ((thread_action_func *) decay_recent_cpu, &decay_factor);
     }
 }

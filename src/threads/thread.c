@@ -147,6 +147,7 @@ void
 update_pri (struct thread *t, void *none)
 {
   ASSERT (is_thread (t));
+  ASSERT (thread_mlfqs);
 
   if (t == idle_thread)
     {
@@ -177,6 +178,8 @@ update_recent_cpu ()
 {
   ffloat decay_factor, avg_2;
   struct thread *t = thread_current ();
+
+  ASSERT (thread_mlfqs);
 
   t->recent_cpu = f_add (t->recent_cpu, FFLOAT (1));
 
@@ -213,7 +216,8 @@ thread_tick (void)
   else
     kernel_ticks++;
 
-  update_recent_cpu ();
+  if (thread_mlfqs)
+    update_recent_cpu ();
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
@@ -439,14 +443,23 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority)
 {
+  int old_priority = thread_current ()->priority;
+
+  ASSERT (!thread_mlfqs);
+
   thread_current ()->priority = new_priority;
+  if (old_priority > new_priority)
+    thread_yield ();
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void)
 {
-  return thread_current ()->priority;
+  if (thread_mlfqs)
+    return thread_current ()->priority;
+  else
+    NOT_REACHED(); /* Not implemented */
 }
 
 /* Sets the current thread's nice value to NICE and
@@ -455,6 +468,9 @@ void
 thread_set_nice (int nice)
 {
   int pri = thread_current ()->priority;
+
+  ASSERT (thread_mlfqs);
+
   pri += 2 * (thread_current ()->nice - nice);
   thread_current ()->priority = CLAMP (pri, PRI_MIN, PRI_MAX);
   thread_current ()->nice = nice;
@@ -467,6 +483,8 @@ thread_get_nice (void)
 {
   struct thread *t = thread_current ();
 
+  ASSERT (thread_mlfqs);
+
   ASSERT_CLAMP (t->nice, -20, 20);
   return t->nice;
 }
@@ -475,7 +493,8 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void)
 {
-  /* Not yet implemented. */
+  ASSERT (thread_mlfqs);
+
   return F_TOINT (f_round (f_mul (load_avg, FFLOAT (100))));
 }
 
@@ -483,6 +502,8 @@ thread_get_load_avg (void)
 int
 thread_get_recent_cpu (void)
 {
+  ASSERT (thread_mlfqs);
+
   return F_TOINT (f_round (f_mul (thread_current ()->recent_cpu,
                                   FFLOAT (100))));
 }

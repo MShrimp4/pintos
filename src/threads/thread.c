@@ -4,6 +4,7 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include <minmax.h>
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -149,16 +150,13 @@ update_pri (struct thread *t, void *none)
 
   if (t == idle_thread)
     {
-      t->priority = -1;
+      t->priority = 0;
       return;
     }
 
   int old_pri = t->priority;
   int new_pri = PRI_MAX - (F_TOINT (t->recent_cpu) / 4) - (t->nice * 2);
-  new_pri = new_pri < 0 ? 0 : new_pri;
-  new_pri = new_pri > PRI_MAX ? PRI_MAX : new_pri;//TODO - CLAMP
-
-  ASSERT_CLAMP (new_pri, PRI_MIN, PRI_MAX);
+  new_pri = CLAMP (new_pri, PRI_MIN, PRI_MAX);
 
   t->priority = new_pri;
   if (old_pri != new_pri && t->status == THREAD_READY)
@@ -456,7 +454,9 @@ thread_get_priority (void)
 void
 thread_set_nice (int nice)
 {
-  thread_current ()->priority += 2 * (thread_current ()->nice - nice);
+  int pri = thread_current ()->priority;
+  pri += 2 * (thread_current ()->nice - nice);
+  thread_current ()->priority = CLAMP (pri, PRI_MIN, PRI_MAX);
   thread_current ()->nice = nice;
   thread_yield ();
 }

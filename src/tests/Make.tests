@@ -2,8 +2,11 @@
 
 include $(patsubst %,$(SRCDIR)/%/Make.tests,$(TEST_SUBDIRS))
 
+PREV_TEST := /dev/null
+
 PROGS = $(foreach subdir,$(TEST_SUBDIRS),$($(subdir)_PROGS))
-TESTS = $(foreach subdir,$(TEST_SUBDIRS),$($(subdir)_TESTS))
+TESTS_FULL = $(foreach subdir,$(TEST_SUBDIRS),$($(subdir)_TESTS))
+TESTS = $(filter-out $(shell egrep "^pass " $(PREV_TEST) | cut -c 6-),$(TESTS_FULL))
 EXTRA_GRADES = $(foreach subdir,$(TEST_SUBDIRS),$($(subdir)_EXTRA_GRADES))
 
 OUTPUTS = $(addsuffix .output,$(TESTS) $(EXTRA_GRADES))

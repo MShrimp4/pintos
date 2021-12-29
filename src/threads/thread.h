@@ -151,4 +151,8 @@ int thread_get_load_avg (void);
 
 bool thread_is_sleeping (struct thread *);
 
+bool sort_pri_descending (const struct list_elem *a,
+                          const struct list_elem *b,
+                          void *aux UNUSED);
+
 #endif /* threads/thread.h */

@@ -488,20 +488,12 @@ thread_update_donation (struct thread *t)
   ASSERT (!list_is_head (&t->elem));
 
   int priority = get_pri (t);
-
   struct list_elem *e = list_prev (&t->elem);
-  for (;
-       !list_is_head (e);
-       e = list_prev (e))
-    {
-      struct thread *donee = list_entry (e, struct thread, elem);
-      if (get_pri (donee) < priority)
-        thread_donate_priority (donee, priority);
-      else
-        return;
-    }
 
-  ASSERT (list_is_head (e));
+  /* If the thread is not a highest-priority thread
+     then there is no need to update anything */
+  if (!list_is_head (e))
+    return;
 
   struct semaphore *sema = list_entry (e, struct semaphore, waiters.head);
 
@@ -515,6 +507,13 @@ thread_update_donation (struct thread *t)
   if (sema->last_holder->status == THREAD_BLOCKED
       && !thread_is_sleeping (sema->last_holder))
     {
+      e = &sema->last_holder->elem;
+      struct list_elem *next_head = list_find_head(e);
+      struct semaphore *next_sema
+        = list_entry (next_head, struct semaphore, waiters.head);
+      list_remove (e);
+      list_insert_ordered (&next_sema->waiters, e,
+                           (list_less_func *) sort_pri_descending, NULL);
       thread_update_donation (sema->last_holder);
     }
 }
@@ -858,6 +857,17 @@ allocate_tid (void)
   lock_release (&tid_lock);
 
   return tid;
+}
+
+bool
+sort_pri_descending (const struct list_elem *a,
+                     const struct list_elem *b,
+                     void *aux UNUSED)
+{
+  struct thread *a_t = list_entry (a, struct thread, elem);
+  struct thread *b_t = list_entry (b, struct thread, elem);
+
+  return get_pri (a_t) > get_pri (b_t);
 }
 
 

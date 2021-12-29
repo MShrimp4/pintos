@@ -141,10 +141,14 @@ void thread_foreach (thread_action_func *, void *);
 int thread_get_priority (void);
 void thread_set_priority (int);
 void thread_donate_priority (struct thread *, int);
+void thread_update_donation (struct thread *t);
+void thread_recover_donation (void);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+bool thread_is_sleeping (struct thread *);
 
 #endif /* threads/thread.h */

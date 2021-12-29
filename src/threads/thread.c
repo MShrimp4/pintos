@@ -456,8 +456,6 @@ thread_foreach (thread_action_func *func, void *aux)
 static void
 set_pri (struct thread *t, int new_priority)
 {
-  int old_priority = get_pri (t);
-
   ASSERT (!thread_mlfqs);
 
   t->base_priority = new_priority;
@@ -479,6 +477,73 @@ thread_donate_priority (struct thread *t, int donated_priority)
   ASSERT (!thread_mlfqs);
 
   t->priority = MAX (t->priority, donated_priority);
+}
+
+void
+thread_update_donation (struct thread *t)
+{
+  ASSERT (!thread_mlfqs);
+  ASSERT (intr_get_level () == INTR_OFF);
+  ASSERT (!thread_is_sleeping (t));
+  ASSERT (!list_is_head (&t->elem));
+
+  int priority = get_pri (t);
+
+  struct list_elem *e = list_prev (&t->elem);
+  for (;
+       !list_is_head (e);
+       e = list_prev (e))
+    {
+      struct thread *donee = list_entry (e, struct thread, elem);
+      if (get_pri (donee) < priority)
+        thread_donate_priority (donee, priority);
+      else
+        return;
+    }
+
+  ASSERT (list_is_head (e));
+
+  struct semaphore *sema = list_entry (e, struct semaphore, waiters.head);
+
+  if (sema->last_holder == NULL)
+    return;
+
+  ASSERT (is_thread (sema->last_holder));
+
+  thread_donate_priority (sema->last_holder, priority);
+
+  if (sema->last_holder->status == THREAD_BLOCKED
+      && !thread_is_sleeping (sema->last_holder))
+    {
+      thread_update_donation (sema->last_holder);
+    }
+}
+
+void
+thread_recover_donation ()
+{
+  struct thread *t = thread_current ();
+  ASSERT (!thread_mlfqs);
+  ASSERT (intr_get_level () == INTR_OFF);
+
+  /* Reset priority first */
+  t->priority = PRI_MIN;
+
+  /* e : element of locks = LOCK */
+  /* l : LOCK */
+  /* donor : element of waiters = THREAD */
+  for (struct list_elem *e = list_begin (&t->locks);
+       e != list_end (&t->locks);
+       e = list_next (e))
+    {
+      struct lock *l = list_entry (e, struct lock, elem);
+      if (list_empty (&l->semaphore.waiters))
+        continue;
+      struct thread *donor = list_entry (list_front (&l->semaphore.waiters),
+                                         struct thread,
+                                         elem);
+      thread_donate_priority (t, get_pri (donor));
+    }
 }
 
 static int
@@ -631,6 +696,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->base_priority = priority;
   t->priority      = PRI_MIN;
   t->wakeup_time = INT64_MAX; /* Wake me up when September ends */
+  list_init (&t->locks);
   if (running_thread () == t) /* initial thread */
     {
       t->nice = 0;
@@ -659,6 +725,15 @@ alloc_frame (struct thread *t, size_t size)
 
   t->stack -= size;
   return t->stack;
+}
+
+/* Check if the thread is sleeping. Sleeping threads have
+   its wakeup time set on wakeup_time. */
+bool
+thread_is_sleeping (struct thread *t)
+{
+  ASSERT (is_thread (t));
+  return (t->wakeup_time != INT64_MAX);
 }
 
 /* Check wakeup time of sleepers and if the current time is

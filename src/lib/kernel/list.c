@@ -154,12 +154,46 @@ list_head (struct list *list)
   return &list->head;
 }
 
+/* Find the list head by its element. */
+struct list_elem *
+list_find_head (struct list_elem *list_elem)
+{
+  while (!list_is_head (list_elem))
+    list_elem = list_elem->prev;
+
+  ASSERT (list_elem->next != NULL);
+  return list_elem;
+}
+
 /* Return's LIST's tail. */
 struct list_elem *
 list_tail (struct list *list) 
 {
   ASSERT (list != NULL);
   return &list->tail;
+}
+
+/* Finds the tail by its element. */
+struct list_elem *
+list_find_tail (struct list_elem *list_elem)
+{
+  while (!list_is_tail (list_elem))
+    list_elem = list_elem->next;
+
+  ASSERT (list_elem->prev != NULL);
+  return list_elem;
+}
+
+bool
+list_is_head (struct list_elem *list_elem)
+{
+  return list_elem->prev == NULL;
+}
+
+bool
+list_is_tail (struct list_elem *list_elem)
+{
+  return list_elem->next == NULL;
 }
 
 /* Inserts ELEM just before BEFORE, which may be either an

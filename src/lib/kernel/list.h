@@ -134,7 +134,12 @@ struct list_elem *list_prev (struct list_elem *);
 struct list_elem *list_rend (struct list *);
 
 struct list_elem *list_head (struct list *);
+struct list_elem *list_find_head (struct list_elem *);
 struct list_elem *list_tail (struct list *);
+struct list_elem *list_find_tail (struct list_elem *);
+
+bool list_is_head (struct list_elem *);
+bool list_is_tail (struct list_elem *);
 
 /* List insertion. */
 void list_insert (struct list_elem *, struct list_elem *);

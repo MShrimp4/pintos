@@ -88,7 +88,7 @@ main (void)
   /* Initialize ourselves as a thread so we can use locks,
      then enable console locking. */
   thread_init ();
-  console_init ();  
+  console_init ();
 
   /* Greet user. */
   printf ("Pintos booting with %'"PRIu32" kB RAM...\n",

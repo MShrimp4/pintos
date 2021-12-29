@@ -133,6 +133,9 @@ thread_start (void)
 
   /* Wait for the idle thread to initialize idle_thread. */
   sema_down (&idle_started);
+  /* idle_thread is registered after the idle thread is
+     unblocked, so thread_unblock wrongly counts up */
+  ready_threads--;
 }
 
 void
@@ -301,6 +304,9 @@ thread_block (void)
   ASSERT (!intr_context ());
   ASSERT (intr_get_level () == INTR_OFF);
 
+  if (thread_current () != idle_thread)
+    ready_threads--;
+  barrier ();
   thread_current ()->status = THREAD_BLOCKED;
   schedule ();
 }
@@ -324,8 +330,10 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   ASSERT_CLAMP (t->priority, PRI_MIN, PRI_MAX);
   if (t != idle_thread)
-    list_push_back (&ready_list[t->priority], &t->elem);
-  ready_threads++;
+    {
+      list_push_back (&ready_list[t->priority], &t->elem);
+      ready_threads++;
+    }
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -415,7 +423,6 @@ thread_yield (void)
     {
       ASSERT_CLAMP (cur->priority, PRI_MIN, PRI_MAX);
       list_push_back (&ready_list[cur->priority], &cur->elem);
-      ready_threads++;
     }
   cur->status = THREAD_READY;
   schedule ();
@@ -661,10 +668,7 @@ next_thread_to_run (void)
 
   for (int i=PRI_MAX;i>=PRI_MIN;i--)
     if (!list_empty (&ready_list[i]))
-      {
-        ready_threads--;
-        return list_entry (list_pop_front (&ready_list[i]), struct thread, elem);
-      }
+      return list_entry (list_pop_front (&ready_list[i]), struct thread, elem);
 
   return idle_thread;
 }

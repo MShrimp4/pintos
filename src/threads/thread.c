@@ -71,9 +71,12 @@ bool thread_mlfqs;
 
 static void kernel_thread (thread_func *, void *aux);
 
-void decay_recent_cpu (struct thread *t, ffloat *decay_factor);
+static void decay_recent_cpu (struct thread *t, ffloat *decay_factor);
+static void update_pri (struct thread *t, void *none UNUSED);
 void update_recent_cpu (void);
-void update_pri (struct thread *t, void *none UNUSED);
+
+static void set_pri (struct thread *t, int new_priority);
+static int  get_pri (struct thread *t);
 
 static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
@@ -138,7 +141,7 @@ thread_start (void)
   ready_threads--;
 }
 
-void
+static void
 decay_recent_cpu (struct thread *t, ffloat *decay_factor)
 {
   ASSERT (is_thread (t));
@@ -146,8 +149,8 @@ decay_recent_cpu (struct thread *t, ffloat *decay_factor)
   t->recent_cpu = f_add (f_mul (*decay_factor, t->recent_cpu), FFLOAT (t->nice));
 }
 
-void
-update_pri (struct thread *t, void *none)
+static void
+update_pri (struct thread *t, void *none UNUSED)
 {
   ASSERT (is_thread (t));
   ASSERT (thread_mlfqs);
@@ -170,7 +173,7 @@ update_pri (struct thread *t, void *none)
     }
 }
 
-void print_stat (struct thread *t, void *none)
+static void print_stat (struct thread *t, void *none UNUSED)
 {
   if (t->tid != 2) /* Ignore IDLE */
     printf("[%lld]: %d(%s) PRI=%d, RCPU=%d\n",timer_ticks() , t->tid, t->name, t->priority, F_TOINT (t->recent_cpu));
@@ -331,11 +334,14 @@ thread_unblock (struct thread *t)
   ASSERT_CLAMP (t->priority, PRI_MIN, PRI_MAX);
   if (t != idle_thread)
     {
-      list_push_back (&ready_list[t->priority], &t->elem);
+      list_push_back (&ready_list[get_pri (t)], &t->elem);
       ready_threads++;
     }
   t->status = THREAD_READY;
   intr_set_level (old_level);
+
+  if (old_level == INTR_ON)
+    thread_yield ();
 }
 
 /* Blocks the running thread until `time`. */
@@ -423,7 +429,7 @@ thread_yield (void)
   if (cur != idle_thread)
     {
       ASSERT_CLAMP (cur->priority, PRI_MIN, PRI_MAX);
-      list_push_back (&ready_list[cur->priority], &cur->elem);
+      list_push_back (&ready_list[get_pri (cur)], &cur->elem);
     }
   cur->status = THREAD_READY;
   schedule ();
@@ -447,27 +453,48 @@ thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
+static void
+set_pri (struct thread *t, int new_priority)
+{
+  int old_priority = get_pri (t);
+
+  ASSERT (!thread_mlfqs);
+
+  t->base_priority = new_priority;
+}
+
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority)
 {
-  int old_priority = thread_current ()->priority;
+  ASSERT (thread_current ()->status == THREAD_RUNNING);
 
+  set_pri (thread_current (), new_priority);
+  thread_yield ();
+}
+
+void
+thread_donate_priority (struct thread *t, int donated_priority)
+{
   ASSERT (!thread_mlfqs);
 
-  thread_current ()->priority = new_priority;
-  if (old_priority > new_priority)
-    thread_yield ();
+  t->priority = MAX (t->priority, donated_priority);
+}
+
+static int
+get_pri (struct thread *t)
+{
+  if (thread_mlfqs)
+    return t->priority;
+  else
+    return MAX (t->priority, t->base_priority);
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void)
 {
-  if (thread_mlfqs)
-    return thread_current ()->priority;
-  else
-    NOT_REACHED(); /* Not implemented */
+  return get_pri (thread_current ());
 }
 
 /* Sets the current thread's nice value to NICE and
@@ -601,7 +628,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
-  t->priority = priority;
+  t->base_priority = priority;
+  t->priority      = PRI_MIN;
   t->wakeup_time = INT64_MAX; /* Wake me up when September ends */
   if (running_thread () == t) /* initial thread */
     {
@@ -756,6 +784,7 @@ allocate_tid (void)
 
   return tid;
 }
+
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */

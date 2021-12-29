@@ -89,6 +89,7 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int base_priority;                  /* Priority without donation */
     int64_t wakeup_time;                /* Tick to wake up at */
     int nice;                           /* Nice value. */
     ffloat recent_cpu;                  /* Recent CPU time */
@@ -96,6 +97,7 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    struct list      locks;             /* List of locks */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -138,6 +140,7 @@ void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
+void thread_donate_priority (struct thread *, int);
 
 int thread_get_nice (void);
 void thread_set_nice (int);

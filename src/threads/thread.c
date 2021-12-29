@@ -482,7 +482,8 @@ thread_donate_priority (struct thread *t, int donated_priority)
 void
 thread_update_donation (struct thread *t)
 {
-  ASSERT (!thread_mlfqs);
+  if (thread_mlfqs) return;
+
   ASSERT (intr_get_level () == INTR_OFF);
   ASSERT (!thread_is_sleeping (t));
   ASSERT (!list_is_head (&t->elem));
@@ -521,8 +522,9 @@ thread_update_donation (struct thread *t)
 void
 thread_recover_donation ()
 {
+  if (thread_mlfqs) return;
+
   struct thread *t = thread_current ();
-  ASSERT (!thread_mlfqs);
   ASSERT (intr_get_level () == INTR_OFF);
 
   /* Reset priority first */
@@ -817,6 +819,7 @@ thread_schedule_tail (struct thread *prev)
      palloc().) */
   if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread)
     {
+      /* TODO: Release holding locks */
       ASSERT (prev != cur);
       palloc_free_page (prev);
     }
@@ -867,7 +870,13 @@ sort_pri_descending (const struct list_elem *a,
   struct thread *a_t = list_entry (a, struct thread, elem);
   struct thread *b_t = list_entry (b, struct thread, elem);
 
-  return get_pri (a_t) > get_pri (b_t);
+  return thread_less_f (b_t, a_t);
+}
+
+bool
+thread_less_f (struct thread *a, struct thread *b)
+{
+  return get_pri (a) < get_pri (b);
 }
 
 

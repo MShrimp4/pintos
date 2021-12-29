@@ -154,5 +154,6 @@ bool thread_is_sleeping (struct thread *);
 bool sort_pri_descending (const struct list_elem *a,
                           const struct list_elem *b,
                           void *aux UNUSED);
+bool thread_less_f (struct thread *a, struct thread *b);
 
 #endif /* threads/thread.h */

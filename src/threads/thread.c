@@ -393,12 +393,34 @@ thread_tid (void)
   return thread_current ()->tid;
 }
 
+/* Frees any holding locks. Semaphores are not managed by this
+   function. */
+static void
+thread_release_locks ()
+{
+  struct thread *t = thread_current ();
+  struct list_elem *e = list_begin (&t->locks);
+
+  while (e != list_end (&t->locks))
+    {
+      struct list_elem *next = list_next (e);
+      struct lock *lock = list_entry (e, struct lock, elem);
+      ASSERT (lock_held_by_current_thread (lock));
+      lock_release (lock);
+      e = next;
+    }
+  /* clean lock list */
+  list_init (&t->locks);
+}
+
 /* Deschedules the current thread and destroys it.  Never
    returns to the caller. */
 void
 thread_exit (void)
 {
   ASSERT (!intr_context ());
+
+  thread_release_locks ();
 
 #ifdef USERPROG
   process_exit ();
@@ -819,7 +841,6 @@ thread_schedule_tail (struct thread *prev)
      palloc().) */
   if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread)
     {
-      /* TODO: Release holding locks */
       ASSERT (prev != cur);
       palloc_free_page (prev);
     }

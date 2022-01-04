@@ -1,4 +1,5 @@
 #include "userprog/process.h"
+#include <ctype.h>
 #include <debug.h>
 #include <inttypes.h>
 #include <round.h>
@@ -14,43 +15,55 @@
 #include "threads/flags.h"
 #include "threads/init.h"
 #include "threads/interrupt.h"
+#include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
 static thread_func start_process NO_RETURN;
-static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static bool load (char *arg_str, void (**eip) (void), void **esp);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *file_name) 
+process_execute (const char *arg_str)
 {
-  char *fn_copy;
+  char *arg_copy;
+  char *file_name;
+  size_t file_name_len;
   tid_t tid;
 
-  /* Make a copy of FILE_NAME.
+  /* Make a copy of ARG_STR.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
+  arg_copy = palloc_get_page (0);
+  if (arg_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (arg_copy, arg_str, PGSIZE);
+
+  const char *fp;
+  for (fp = arg_str; !isspace (*fp); fp++);
+  file_name_len = (fp - arg_str) + 1;
+  if (NULL == (file_name = malloc (file_name_len)))
+    return TID_ERROR;
+  memcpy (file_name, arg_str, file_name_len);
+  file_name[file_name_len -1] = '\0';
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, arg_copy);
+  free (file_name);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    palloc_free_page (arg_copy); 
   return tid;
 }
 
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *arg_str_)
 {
-  char *file_name = file_name_;
+  char *arg_str = arg_str_;
   struct intr_frame if_;
   bool success;
 
@@ -59,10 +72,12 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (arg_str, &if_.eip, &if_.esp);
+
+  //hex_dump (0, if_.esp, ((uint8_t *) PHYS_BASE) - ((uint8_t *) if_.esp), true);
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
+  palloc_free_page (arg_str);
   if (!success) 
     thread_exit ();
 
@@ -195,7 +210,9 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static void *push_stack (void* stack, void *object, size_t size);
+static void *setup_argc_argv (char *page, char *arg_str);
+static bool setup_stack (void **esp, char *arg_str);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -206,11 +223,12 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
 bool
-load (const char *file_name, void (**eip) (void), void **esp) 
+load (char *arg_str, void (**eip) (void), void **esp) 
 {
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
+  const char *file_name = t->name;
   off_t file_ofs;
   bool success = false;
   int i;
@@ -302,7 +320,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, arg_str))
     goto done;
 
   /* Start address. */
@@ -424,10 +442,68 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
+#define ALIGN (sizeof (int))
+/* Helper function to push objects aligned with */
+static void *
+push_stack (void* stack, void *object, size_t size)
+{
+  size_t aligned_size = (size + ALIGN - 1) & -ALIGN;
+  char  *new_stack    = (char *)stack - aligned_size;
+  ASSERT (aligned_size % ALIGN == 0 && aligned_size >= size);
+
+  if (size == 0)
+    return stack;
+
+  memcpy (new_stack, object, size);
+  return new_stack;
+}
+
+static void *
+setup_argc_argv (char *page, char *arg_str)
+{
+  char *saveptr = NULL;
+  /* Assume args[] and stack does not overlap */
+  char **argv_tmp = (char **)page;
+  char **aptr = argv_tmp;
+  char  *sptr = page + PGSIZE;
+  for (char *lptr = strtok_r (arg_str, " ", &saveptr);
+       lptr != NULL;
+       lptr = strtok_r (NULL, " \n", &saveptr))
+    {
+      size_t slen = strlen (lptr);
+      if (slen == 0)
+        continue;
+
+      sptr = push_stack(sptr, lptr, slen + 1);
+      *aptr++ = sptr;
+    }
+  /* C standard mandates argv[argc] == NULL */
+  *aptr++ = NULL;
+
+  int argv_size = (aptr - argv_tmp);
+  int num_args  = argv_size - 1;
+
+  /* Push contents of argv */
+  sptr = push_stack(sptr, argv_tmp, argv_size * sizeof (char *));
+
+  /* Push **argv */
+  char **argv  = (char **)sptr;
+  sptr = push_stack (sptr, &argv, sizeof (char **));
+
+  /* Push argc */
+  sptr = push_stack (sptr, &num_args, sizeof (int));
+
+  /* Push dummy return address */
+  void *nullptr = NULL;
+  sptr = push_stack (sptr, &nullptr, sizeof (void *));
+
+  return sptr;
+}
+
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, char *arg_str)
 {
   uint8_t *kpage;
   bool success = false;
@@ -437,7 +513,7 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE - 12; /* TODO */
+        *esp = setup_argc_argv((void *)PHYS_BASE, arg_str);
       else
         palloc_free_page (kpage);
     }

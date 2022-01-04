@@ -163,7 +163,6 @@ page_fault (struct intr_frame *f)
   intr_enable ();
   asm ("movl %1 %0" : "=m" (f->eip) : "m" (f->eax));
   asm ("movl 0xFFFFFFFF %0" : "=m" (f->eax));
-  f->eax = -1;
 #endif
 }
 

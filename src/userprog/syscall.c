@@ -5,6 +5,8 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+typedef int pid_t;
+
 typedef union{
   int      as_int;
   unsigned as_uint;
@@ -53,7 +55,8 @@ put_user (uint8_t *udst, uint8_t byte)
 {
   int error_code;
   asm ("movl $1f, %0; movb %b2, %1; 1:"
-       : "=&a" (error_code), "=m" (*udst), : "q" (byte));
+       : "=&a" (error_code), "=m" (*udst) : "q" (byte));
+  return error_code != -1;
 }
 
 void
@@ -65,7 +68,10 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-  switch (*(f->esp)++)
+  int32_t **esp = (int32_t **)&f->esp;
+
+  NOT_REACHED();
+  switch (*(*esp)++)
     {
     case SYS_HALT:
       shutdown_power_off ();
@@ -82,7 +88,7 @@ syscall_handler (struct intr_frame *f)
     case SYS_SEEK:
     case SYS_TELL:
     case SYS_CLOSE:
-      printf ("%d : not implemented\n", *(f->esp -1));
+      printf ("%d : not implemented\n", *(*esp -1));
       thread_exit ();
       break;
     default :

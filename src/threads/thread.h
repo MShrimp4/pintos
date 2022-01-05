@@ -102,6 +102,8 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    struct lock call_lock;              /* Lock for syscalls */
+    struct list file;                   /* File list */
 #endif
 
     /* Owned by thread.c. */

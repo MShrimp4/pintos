@@ -103,6 +103,7 @@ start_process (void *arg_str_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  NOT_REACHED (); /* TODO: High priority */
   return -1;
 }
 

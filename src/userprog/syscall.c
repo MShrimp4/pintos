@@ -69,6 +69,7 @@ static void
 syscall_handler (struct intr_frame *f) 
 {
   int32_t **esp = (int32_t **)&f->esp;
+  PANIC ("");
 
   switch (*(*esp)++)
     {

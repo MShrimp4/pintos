@@ -182,6 +182,7 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+  printf ("%s: exit(%d)\n", cur->name, cur->return_val->value);
   free_subthread_list (cur);
   mark_exit_on_return_value ();
 

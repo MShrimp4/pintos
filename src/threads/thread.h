@@ -15,6 +15,18 @@ enum thread_status
     THREAD_DYING        /* About to be destroyed. */
   };
 
+/* Temporary space to hold return value. */
+#ifdef USERPROG
+struct return_value
+{
+  struct lock    lock;   /* Used for process_wait */
+  struct thread *thread; /* The thread */
+  int            value;  /* Return value. */
+  tid_t          tid;    /* Thread ID, used after thread has died */
+  list_elem      elem;   /* Used by thread->child */
+};
+#endif /* USERPROG */
+
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
@@ -102,8 +114,9 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    struct lock call_lock;              /* Lock for syscalls */
     struct list file;                   /* File list */
+    struct list child;                  /* Child list (elem: return_value) */
+    struct return_value *return_val;    /* Pointer of return_value struct */
 #endif
 
     /* Owned by thread.c. */

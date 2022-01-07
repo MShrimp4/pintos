@@ -76,14 +76,12 @@ start_process (void *arg_str_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (arg_str, &if_.eip, &if_.esp);
 
-  //hex_dump (0, if_.esp, ((uint8_t *) PHYS_BASE) - ((uint8_t *) if_.esp), true);
+  hex_dump (0, if_.esp, 16, true);
 
   /* If load failed, quit. */
   palloc_free_page (arg_str);
   if (!success) 
     thread_exit ();
-
-  thread_exit ();
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -182,7 +180,8 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
-  printf ("%s: exit(%d)\n", cur->name, cur->return_val->value);
+  /* printf ("%s: exit(%d)\n", cur->name, cur->return_val->value); */
+  /* Make process_exit get return value or add some way to keep return val */
   free_subthread_list (cur);
   mark_exit_on_return_value ();
 
@@ -536,9 +535,9 @@ setup_argc_argv (char *page, char *arg_str)
 {
   char *saveptr = NULL;
   /* Assume args[] and stack does not overlap */
-  char **argv_tmp = (char **)page;
+  char **argv_tmp = (char **)(page - PGSIZE);
   char **aptr = argv_tmp;
-  char  *sptr = page + PGSIZE;
+  char  *sptr = page;
   for (char *lptr = strtok_r (arg_str, " ", &saveptr);
        lptr != NULL;
        lptr = strtok_r (NULL, " \n", &saveptr))

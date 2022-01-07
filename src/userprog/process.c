@@ -21,6 +21,8 @@
 #include "threads/vaddr.h"
 
 static thread_func start_process NO_RETURN;
+static void free_subthread_list (struct thread *t);
+static void mark_exit_on_return_value (void);
 static bool load (char *arg_str, void (**eip) (void), void **esp);
 
 /* Starts a new thread running a user program loaded from
@@ -81,6 +83,8 @@ start_process (void *arg_str_)
   if (!success) 
     thread_exit ();
 
+  thread_exit ();
+
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -101,10 +105,74 @@ start_process (void *arg_str_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid)
 {
-  NOT_REACHED (); /* TODO: High priority */
+  struct thread *t = thread_current ();
+
+  start_interthread_action ();
+  for (struct list_elem *e = list_begin (&t->child);
+       e != list_end (&t->child);
+       e = list_next (e))
+    {
+      struct return_value *r = list_entry (e, struct return_value, elem);
+
+      if (r->tid == child_tid)
+        {
+          end_interthread_action ();
+          lock_acquire (&r->lock);
+
+          ASSERT (r->thread == NULL);
+          start_interthread_action ();
+          lock_release (&r->lock);
+          int val = r->value;
+
+          list_remove (e);
+          end_interthread_action ();
+          free (r);
+          return val;
+        }
+    }
   return -1;
+}
+
+static void
+free_subthread_list (struct thread *t)
+{
+  start_interthread_action ();
+
+  struct list_elem *e = list_begin (&t->child);
+  while (e != list_end (&t->child))
+    {
+      struct list_elem *next  = list_next (e);
+      struct return_value *r = list_entry (e, struct return_value, elem);
+
+      if (r->thread != NULL)
+        {
+          r->thread->return_val = NULL;
+          /* No need to unlock this one */
+          list_remove (&r->lock.elem);
+        }
+
+      free (e);
+      e = next;
+    }
+
+  end_interthread_action ();
+}
+
+static void
+mark_exit_on_return_value ()
+{
+  struct thread *t = thread_current ();
+  start_interthread_action ();
+
+  if (t->return_val != NULL)
+    {
+      t->return_val->thread = NULL;
+      lock_release (&t->return_val->lock);
+    }
+
+  end_interthread_action ();
 }
 
 /* Free the current process's resources. */
@@ -113,6 +181,9 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  free_subthread_list (cur);
+  mark_exit_on_return_value ();
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -518,6 +589,7 @@ setup_stack (void **esp, char *arg_str)
       else
         palloc_free_page (kpage);
     }
+
   return success;
 }
 

@@ -9,6 +9,7 @@
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "devices/timer.h"
@@ -72,9 +73,6 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
 
-static void start_interthread_action (void);
-static void end_interthread_action (void);
-
 static void kernel_thread (thread_func *, void *aux);
 
 static void decay_recent_cpu (struct thread *t, ffloat *decay_factor);
@@ -94,6 +92,11 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+
+#ifdef USERPROG
+static void free_subthread_list (struct thread *t);
+static void return_value (int val);
+#endif /* USERPROG */
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -280,6 +283,22 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+#ifdef USERPROG
+  {
+    /* struct thread *t */
+    struct thread       *cur  = thread_current ();
+    struct return_value *rval = malloc (sizeof (struct return_value));
+    if (rval == NULL)
+      PANIC ("Failed to allocate return value storage");
+    lock_init (&rval->lock);
+    lock_acquire_for (&rval->lock, t);
+    rval->tid    = t->tid;
+    rval->thread = t;
+    rval->value  = 0;
+    t->return_val = rval;
+    list_push_back (&cur->child, &rval->elem);
+  }
+#endif /* USERPROG */
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -427,11 +446,11 @@ thread_exit (void)
 {
   ASSERT (!intr_context ());
 
-  thread_release_locks ();
-
 #ifdef USERPROG
   process_exit ();
 #endif
+
+  thread_release_locks ();
 
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
@@ -739,8 +758,9 @@ init_thread (struct thread *t, const char *name, int priority)
     }
   t->magic = THREAD_MAGIC;
 #ifdef USERPROG
-  /* TODO */
-#endif
+  list_init (&t->child);
+  t->return_val = NULL;
+#endif /* USERPROG */
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -894,14 +914,14 @@ allocate_tid (void)
 }
 
 /* Lock other inter-thread action */
-static void
+void
 start_interthread_action ()
 {
   lock_acquire (&ital);
 }
 
 /* Unlock inter-thread action lock */
-static void
+void
 end_interthread_action ()
 {
   lock_release (&ital);

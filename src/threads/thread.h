@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include <ffloat.h>
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -15,22 +16,22 @@ enum thread_status
     THREAD_DYING        /* About to be destroyed. */
   };
 
-/* Temporary space to hold return value. */
-#ifdef USERPROG
-struct return_value
-{
-  struct lock    lock;   /* Used for process_wait */
-  struct thread *thread; /* The thread */
-  int            value;  /* Return value. */
-  tid_t          tid;    /* Thread ID, used after thread has died */
-  list_elem      elem;   /* Used by thread->child */
-};
-#endif /* USERPROG */
-
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
+
+/* Temporary space to hold return value. */
+#ifdef USERPROG
+struct return_value
+{
+  struct lock      lock;   /* Used for process_wait */
+  struct thread   *thread; /* The thread */
+  int              value;  /* Return value. */
+  tid_t            tid;    /* Thread ID, used after thread has died */
+  struct list_elem elem;   /* Used by thread->child */
+};
+#endif /* USERPROG */
 
 /* Thread priorities. */
 #define PRI_MIN 0                       /* Lowest priority. */
@@ -163,6 +164,9 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+void start_interthread_action (void);
+void end_interthread_action (void);
 
 bool thread_is_sleeping (struct thread *);
 

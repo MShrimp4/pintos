@@ -70,7 +70,6 @@ syscall_handler (struct intr_frame *f)
 {
   int32_t **esp = (int32_t **)&f->esp;
 
-  NOT_REACHED();
   switch (*(*esp)++)
     {
     case SYS_HALT:
@@ -88,7 +87,7 @@ syscall_handler (struct intr_frame *f)
     case SYS_SEEK:
     case SYS_TELL:
     case SYS_CLOSE:
-      printf ("%d : not implemented\n", *(*esp -1));
+      PANIC ("%d : not implemented\n", *(*esp -1));
       thread_exit ();
       break;
     default :

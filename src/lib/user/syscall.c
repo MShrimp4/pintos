@@ -120,7 +120,6 @@ read (int fd, void *buffer, unsigned size)
 int
 write (int fd, const void *buffer, unsigned size)
 {
-  NOT_REACHED ();
   return syscall3 (SYS_WRITE, fd, buffer, size);
 }
 

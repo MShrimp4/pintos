@@ -193,6 +193,18 @@ lock_init (struct lock *lock)
   sema_init (&lock->semaphore, 1);
 }
 
+void
+lock_acquire_for (struct lock *lock, struct thread *t)
+{
+  ASSERT (!intr_context ());
+  ASSERT (lock != NULL);
+
+  sema_down (&lock->semaphore);
+
+  list_push_back (&t->locks, &lock->elem);
+  lock->holder = t;
+}
+
 /* Acquires LOCK, sleeping until it becomes available if
    necessary.  The lock must not already be held by the current
    thread.
@@ -204,14 +216,9 @@ lock_init (struct lock *lock)
 void
 lock_acquire (struct lock *lock)
 {
-  ASSERT (lock != NULL);
-  ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  sema_down (&lock->semaphore);
-
-  list_push_back (&thread_current ()->locks, &lock->elem);
-  lock->holder = thread_current ();
+  lock_acquire_for (lock, thread_current ());
 }
 
 /* Tries to acquires LOCK and returns true if successful or false

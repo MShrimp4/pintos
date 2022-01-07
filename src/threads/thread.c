@@ -43,6 +43,9 @@ static struct thread *initial_thread;
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
+/* Lock used to lock inter-thread edit */
+static struct lock ital; /* Inter-Thread Action Lock */
+
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame
   {
@@ -68,6 +71,9 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
+
+static void start_interthread_action (void);
+static void end_interthread_action (void);
 
 static void kernel_thread (thread_func *, void *aux);
 
@@ -108,6 +114,7 @@ thread_init (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   lock_init (&tid_lock);
+  lock_init (&ital);
   for (int i=PRI_MIN;i<=PRI_MAX;i++)
     list_init (&ready_list[i]);
   list_init (&all_list);
@@ -884,6 +891,20 @@ allocate_tid (void)
   lock_release (&tid_lock);
 
   return tid;
+}
+
+/* Lock other inter-thread action */
+static void
+start_interthread_action ()
+{
+  lock_acquire (&ital);
+}
+
+/* Unlock inter-thread action lock */
+static void
+end_interthread_action ()
+{
+  lock_release (&ital);
 }
 
 bool

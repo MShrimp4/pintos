@@ -76,8 +76,6 @@ start_process (void *arg_str_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (arg_str, &if_.eip, &if_.esp);
 
-  hex_dump (0, if_.esp, 16, true);
-
   /* If load failed, quit. */
   palloc_free_page (arg_str);
   if (!success) 
@@ -566,8 +564,8 @@ setup_argc_argv (char *page, char *arg_str)
   sptr = push_stack (sptr, &num_args, sizeof (int));
 
   /* Push dummy return address */
-  void *nullptr = NULL;
-  sptr = push_stack (sptr, &nullptr, sizeof (void *));
+  void *dummy_ptr = 0xCAFEBABE;
+  sptr = push_stack (sptr, &dummy_ptr, sizeof (void *));
 
   return sptr;
 }
@@ -589,6 +587,9 @@ setup_stack (void **esp, char *arg_str)
       else
         palloc_free_page (kpage);
     }
+
+  printf ("%p\n", *esp);
+  hex_dump (0, *esp, ((uint8_t *) PHYS_BASE) - (uint8_t *)*esp, true);
 
   return success;
 }

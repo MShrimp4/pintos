@@ -294,7 +294,7 @@ thread_create (const char *name, int priority,
     lock_acquire_for (&rval->lock, t);
     rval->tid    = t->tid;
     rval->thread = t;
-    rval->value  = 0;
+    rval->value  = t->val = 0;
     t->return_val = rval;
     list_push_back (&cur->child, &rval->elem);
   }
@@ -760,6 +760,7 @@ init_thread (struct thread *t, const char *name, int priority)
 #ifdef USERPROG
   list_init (&t->child);
   t->return_val = NULL;
+  t->val        = 0;
 #endif /* USERPROG */
 
   old_level = intr_disable ();

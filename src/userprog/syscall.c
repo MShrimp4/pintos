@@ -1,4 +1,5 @@
 #include "userprog/syscall.h"
+#include <console.h>
 #include <stdio.h>
 #include <syscall-nr.h>
 #include "devices/shutdown.h"
@@ -15,11 +16,18 @@ typedef union{
   pid_t    as_pid_t;
 } word;
 
-#define call_1 (f, ptr, t1)         f ((ptr++)->t1)
-#define call_2 (f, ptr, t1, t2)     f ((ptr++)->t1, (ptr++)->t2)
-#define call_3 (f, ptr, t1, t2, t3) f ((ptr++)->t1, (ptr++)->t2, (ptr++)->t3)
+#define aw(ptr)                ((word *) (ptr))
+#define call_1(f,ptr,t1)       (f) (aw(ptr++)-> t1)
+#define call_2(f,ptr,t1,t2)    (f) (aw(ptr++)-> t1, aw(ptr++)-> t2)
+#define call_3(f,ptr,t1,t2,t3) (f) (aw(ptr++)-> t1, aw(ptr++)-> t2, aw(ptr++)-> t3)
 
 static void syscall_handler (struct intr_frame *);
+
+/* Arguments are in reverse order. watch out! */
+/* (START) system call wrappers prototype */
+int  __write (unsigned size, const void *buffer, int fd);
+void __exit  (int status);
+/* (END  ) system call wrappers prototype */
 
 static bool
 try_movl (const uint32_t *src, uint32_t *dest)
@@ -68,7 +76,6 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-  PANIC ("");
   int32_t **esp = (int32_t **)&f->esp;
 
   switch (*(*esp)++)
@@ -77,6 +84,8 @@ syscall_handler (struct intr_frame *f)
       shutdown_power_off ();
       break;
     case SYS_EXIT:
+      call_1 (__exit, (*esp), as_int);
+      break;
     case SYS_EXEC:
     case SYS_WAIT:
     case SYS_CREATE:
@@ -84,7 +93,12 @@ syscall_handler (struct intr_frame *f)
     case SYS_OPEN:
     case SYS_FILESIZE:
     case SYS_READ:
+      PANIC ("%d : not implemented\n", *(*esp -1));
+      thread_exit ();
+      break;
     case SYS_WRITE:
+      f->eax = call_3 (__write, (*esp), as_uint, as_voidp, as_int);
+      break;
     case SYS_SEEK:
     case SYS_TELL:
     case SYS_CLOSE:
@@ -95,3 +109,38 @@ syscall_handler (struct intr_frame *f)
       thread_exit ();
     }
 }
+
+/* (START) system call wrappers implementation */
+
+int __write (unsigned size, const void *buffer, int fd)
+{
+  char *buf = buffer;
+
+  if (fd != STDOUT_FILENO)
+    {
+      printf ("write() other than STDOUT not implemented (fd = %d)\n", fd);
+      __exit (-1);
+      thread_exit();
+    }
+
+  /* Sloppy implementation, I know. (TODO) */
+  if (get_user (buffer) != -1
+      && get_user (buffer + size -1) != -1)
+    putbuf (buffer, size);
+  else
+    {
+      __exit (-1);
+      thread_exit();
+    }
+
+  return size;
+}
+
+void __exit (int status)
+{
+  struct thread *t = thread_current ();
+
+  t->val = status;
+  thread_exit();
+}
+/* (END  ) system call wrappers implementation */

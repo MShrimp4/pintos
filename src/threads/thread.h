@@ -117,6 +117,7 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
     struct list file;                   /* File list */
     struct list child;                  /* Child list (elem: return_value) */
+    int val;                            /* Return value kept before exit() */
     struct return_value *return_val;    /* Pointer of return_value struct */
 #endif
 

@@ -81,6 +81,8 @@ kill (struct intr_frame *f)
      
   /* The interrupt frame's code segment value tells us where the
      exception originated. */
+  /* TODO */
+  thread_current ()->val = -(100 + f->vec_no);
   switch (f->cs)
     {
     case SEL_UCSEG:
@@ -104,6 +106,7 @@ kill (struct intr_frame *f)
          kernel. */
       printf ("Interrupt %#04x (%s) in unknown segment %04x\n",
              f->vec_no, intr_name (f->vec_no), f->cs);
+
       thread_exit ();
     }
 }
@@ -161,6 +164,15 @@ page_fault (struct intr_frame *f)
   kill (f);
 #else
   intr_enable ();
+
+  if ((f->error_code & PF_U) == 0
+      || (f->error_code & PF_P) == 0)
+    {
+      printf ("Unhandled page fault");
+      kill (f);
+      return;
+    }
+
   *((int32_t *)&f->eip) = *((int32_t *)&f->eax);
   *((int32_t *)&f->eax) = -1;
 #endif

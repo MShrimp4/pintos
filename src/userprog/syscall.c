@@ -27,21 +27,15 @@ void __exit  (int status);
 static bool
 try_movl (const uint32_t *src, uint32_t *dest)
 {
-  uint32_t result, temp;
-
+  uint32_t result;
   /* This code assumes that $1f is not on
      0xffffffff. It is impossilbe for an 32-bit
      architecture anyways. */
 
-  asm ("movl $1f, %0; movl %1, %0; 1:"
+  asm ("movl $1f, %0; movl %1, %0"
        : "=&a" (result) : "m" (*src));
-  if (result == 0xFFFFFFFF)
-    return false;
-
-  ASSERT (*src == result);
-  temp = result;
-  asm ("movl $1f, %0; movl %2, %1; 1:"
-       : "=&a" (result), "=m" (*dest) : "r" (temp));
+  asm ("movl %1, %0; 1:"
+       : "=m" (*dest) : "a" (result));
   return (result != 0xFFFFFFFF);
 }
 

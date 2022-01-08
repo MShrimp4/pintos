@@ -82,7 +82,7 @@ kill (struct intr_frame *f)
   /* The interrupt frame's code segment value tells us where the
      exception originated. */
   /* TODO */
-  thread_current ()->val = -(100 + f->vec_no);
+  thread_current ()->val = -1;
   switch (f->cs)
     {
     case SEL_UCSEG:
@@ -130,7 +130,7 @@ page_fault (struct intr_frame *f)
   bool user;         /* True: access by user, false: access by kernel. */
   void *fault_addr;  /* Fault address. */
 
-#if 1
+#if 0
 
   /* Obtain faulting address, the virtual address that was
      accessed to cause the fault.  It may point to code or to
@@ -165,16 +165,15 @@ page_fault (struct intr_frame *f)
 #else
   intr_enable ();
 
-  if ((f->error_code & PF_U) == 0
-      || (f->error_code & PF_P) == 0)
+  if ((f->error_code & PF_U) != 0)
     {
       printf ("Unhandled page fault");
       kill (f);
       return;
     }
 
-  *((int32_t *)&f->eip) = *((int32_t *)&f->eax);
-  *((int32_t *)&f->eax) = -1;
+  *((uint32_t *)&f->eip) = f->eax;
+  f->eax = 0xFFFFFFFF;
 #endif
 }
 

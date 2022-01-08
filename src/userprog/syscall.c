@@ -5,15 +5,19 @@
 #include "devices/shutdown.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
 
 typedef int pid_t;
 
-#define aw(t,ptr)              *((t *) (ptr))
-#define call_1(f,ptr,t1)       (f) (aw(t1,ptr+1))
-#define call_2(f,ptr,t1,t2)    (f) (aw(t1,ptr+1), aw(t2,ptr+2))
-#define call_3(f,ptr,t1,t2,t3) (f) (aw(t1,ptr+1), aw(t2,ptr+2), aw(t3,ptr+3))
+#define AW(T,PTR)              *((T *) safe_movl (PTR))
+#define CALL_1(F,PTR,T1)       (F) (AW(T1,(PTR)+1))
+#define CALL_2(F,PTR,T1,T2)    (F) (AW(T1,(PTR)+1), AW(T2,(PTR)+2))
+#define CALL_3(F,PTR,T1,T2,T3) (F) (AW(T1,(PTR)+1), AW(T2,(PTR)+2), AW(T3,(PTR)+3))
 
 static void syscall_handler (struct intr_frame *);
+
+static bool  try_movl  (const uint32_t *src, uint32_t *dest);
+static void *safe_movl (const uint32_t *src);
 
 /* (START) system call wrappers prototype */
 int  __write (int fd, const void *buffer, unsigned size);
@@ -23,14 +27,31 @@ void __exit  (int status);
 static bool
 try_movl (const uint32_t *src, uint32_t *dest)
 {
-  int result;
+  uint32_t result, temp;
+
   /* This code assumes that $1f is not on
      0xffffffff. It is impossilbe for an 32-bit
      architecture anyways. */
 
+  asm ("movl $1f, %0; movl %1, %0; 1:"
+       : "=&a" (result) : "m" (*src));
+  if (result == 0xFFFFFFFF)
+    return false;
+
+  ASSERT (*src == result);
+  temp = result;
   asm ("movl $1f, %0; movl %2, %1; 1:"
-       : "=&a" (result) , "=m" (*dest) : "m" (*src));
-  return result != -1;
+       : "=&a" (result), "=m" (*dest) : "r" (temp));
+  return (result != 0xFFFFFFFF);
+}
+
+static void *
+safe_movl (const uint32_t *src)
+{
+  static uint32_t dest;
+  if (!is_user_vaddr (src) || !try_movl(src, &dest))
+    __exit (-1);
+  return &dest;
 }
 
 /* Reads a byte at user address UADDR.
@@ -67,15 +88,18 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-  int32_t *esp = (int32_t *)f->esp;
+  uint32_t **esp = &f->esp;
+  uint32_t sys_num;
 
-  switch (*esp)
+  sys_num = AW (uint32_t, *esp);
+
+  switch (sys_num)
     {
     case SYS_HALT:
       shutdown_power_off ();
       break;
     case SYS_EXIT:
-      call_1 (__exit, esp, int);
+      CALL_1 (__exit, *esp, int);
       break;
     case SYS_EXEC:
     case SYS_WAIT:
@@ -84,16 +108,16 @@ syscall_handler (struct intr_frame *f)
     case SYS_OPEN:
     case SYS_FILESIZE:
     case SYS_READ:
-      PANIC ("%d : not implemented\n", *esp);
+      PANIC ("%d : not implemented\n", *(uint32_t *)f->esp);
       thread_exit ();
       break;
     case SYS_WRITE:
-      f->eax = call_3 (__write, esp, int, void *, unsigned);
+      f->eax = CALL_3 (__write, *esp, int, void *, unsigned);
       break;
     case SYS_SEEK:
     case SYS_TELL:
     case SYS_CLOSE:
-      PANIC ("%d : not implemented\n", *esp);
+      PANIC ("%d : not implemented\n", *(uint32_t *)f->esp);
       thread_exit ();
       break;
     default :
@@ -114,9 +138,10 @@ int __write (int fd, const void *buffer, unsigned size)
     }
 
   /* Sloppy implementation, I know. (TODO) */
-  if (get_user (buffer) != -1
-      && get_user (buffer + size -1) != -1)
-    putbuf (buffer, size);
+  if (is_user_vaddr (buf + size -1)
+      && get_user ((void *) buf) != -1
+      && get_user ((void *) (buf + size -1)) != -1)
+    putbuf (buf, size);
   else
     __exit (-1);
 

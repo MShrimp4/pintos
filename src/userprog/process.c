@@ -565,7 +565,7 @@ setup_argc_argv (char *page, char *arg_str)
   sptr = push_stack (sptr, &num_args, sizeof (int));
 
   /* Push dummy return address */
-  void *dummy_ptr = 0xCAFEBABE;
+  void *dummy_ptr = (void *) 0xCAFEBABE;
   sptr = push_stack (sptr, &dummy_ptr, sizeof (void *));
 
   return sptr;

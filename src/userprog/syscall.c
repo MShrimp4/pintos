@@ -8,24 +8,15 @@
 
 typedef int pid_t;
 
-typedef union{
-  int      as_int;
-  unsigned as_uint;
-  char *   as_charp;
-  void *   as_voidp;
-  pid_t    as_pid_t;
-} word;
-
-#define aw(ptr)                ((word *) (ptr))
-#define call_1(f,ptr,t1)       (f) (aw(ptr++)-> t1)
-#define call_2(f,ptr,t1,t2)    (f) (aw(ptr++)-> t1, aw(ptr++)-> t2)
-#define call_3(f,ptr,t1,t2,t3) (f) (aw(ptr++)-> t1, aw(ptr++)-> t2, aw(ptr++)-> t3)
+#define aw(t,ptr)              *((t *) (ptr))
+#define call_1(f,ptr,t1)       (f) (aw(t1,ptr+1))
+#define call_2(f,ptr,t1,t2)    (f) (aw(t1,ptr+1), aw(t2,ptr+2))
+#define call_3(f,ptr,t1,t2,t3) (f) (aw(t1,ptr+1), aw(t2,ptr+2), aw(t3,ptr+3))
 
 static void syscall_handler (struct intr_frame *);
 
-/* Arguments are in reverse order. watch out! */
 /* (START) system call wrappers prototype */
-int  __write (unsigned size, const void *buffer, int fd);
+int  __write (int fd, const void *buffer, unsigned size);
 void __exit  (int status);
 /* (END  ) system call wrappers prototype */
 
@@ -76,15 +67,15 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-  int32_t **esp = (int32_t **)&f->esp;
+  int32_t *esp = (int32_t *)f->esp;
 
-  switch (*(*esp)++)
+  switch (*esp)
     {
     case SYS_HALT:
       shutdown_power_off ();
       break;
     case SYS_EXIT:
-      call_1 (__exit, (*esp), as_int);
+      call_1 (__exit, esp, int);
       break;
     case SYS_EXEC:
     case SYS_WAIT:
@@ -93,16 +84,16 @@ syscall_handler (struct intr_frame *f)
     case SYS_OPEN:
     case SYS_FILESIZE:
     case SYS_READ:
-      PANIC ("%d : not implemented\n", *(*esp -1));
+      PANIC ("%d : not implemented\n", *esp);
       thread_exit ();
       break;
     case SYS_WRITE:
-      f->eax = call_3 (__write, (*esp), as_uint, as_voidp, as_int);
+      f->eax = call_3 (__write, esp, int, void *, unsigned);
       break;
     case SYS_SEEK:
     case SYS_TELL:
     case SYS_CLOSE:
-      PANIC ("%d : not implemented\n", *(*esp -1));
+      PANIC ("%d : not implemented\n", *esp);
       thread_exit ();
       break;
     default :
@@ -112,7 +103,7 @@ syscall_handler (struct intr_frame *f)
 
 /* (START) system call wrappers implementation */
 
-int __write (unsigned size, const void *buffer, int fd)
+int __write (int fd, const void *buffer, unsigned size)
 {
   char *buf = buffer;
 
@@ -120,7 +111,6 @@ int __write (unsigned size, const void *buffer, int fd)
     {
       printf ("write() other than STDOUT not implemented (fd = %d)\n", fd);
       __exit (-1);
-      thread_exit();
     }
 
   /* Sloppy implementation, I know. (TODO) */
@@ -128,10 +118,7 @@ int __write (unsigned size, const void *buffer, int fd)
       && get_user (buffer + size -1) != -1)
     putbuf (buffer, size);
   else
-    {
-      __exit (-1);
-      thread_exit();
-    }
+    __exit (-1);
 
   return size;
 }

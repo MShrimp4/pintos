@@ -4,7 +4,7 @@
 /* GCC lets us add "attributes" to functions, function
    parameters, etc. to indicate their properties.
    See the GCC manual for details. */
-#if __GNUC__ > 4
+#if __GNUC__ > 10
 #define MALLOC(DEALLOC) __attribute__ ((malloc, malloc (DEALLOC)))
 #else
 #define MALLOC(DEALLOC) __attribute__ ((malloc))

@@ -3,11 +3,14 @@
 #include <stdio.h>
 #include <syscall-nr.h>
 #include "devices/shutdown.h"
+#include "threads/synch.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
 typedef int pid_t;
+
+static struct lock syscall_lock;
 
 #define AW(T,PTR)              *((T *) safe_movl (PTR))
 #define CALL_1(F,PTR,T1)       (F) (AW(T1,(PTR)+1))
@@ -18,10 +21,24 @@ static void syscall_handler (struct intr_frame *);
 
 static bool  try_movl  (const uint32_t *src, uint32_t *dest);
 static void *safe_movl (const uint32_t *src);
+static void  assert_str_sanity (const char *str);
 
 /* (START) system call wrappers prototype */
+
+
+/* void halt (void) NO_RETURN; */
+void __exit (int status) NO_RETURN;
+int  __exec (const char *file);
+int  __wait (pid_t);
+/* bool create (const char *file, unsigned initial_size); */
+/* bool remove (const char *file); */
+/* int open (const char *file); */
+/* int filesize (int fd); */
+/* int read (int fd, void *buffer, unsigned length); */
 int  __write (int fd, const void *buffer, unsigned size);
-void __exit  (int status);
+/* void seek (int fd, unsigned position); */
+/* unsigned tell (int fd); */
+/* void close (int fd); */
 /* (END  ) system call wrappers prototype */
 
 static bool
@@ -73,9 +90,29 @@ put_user (uint8_t *udst, uint8_t byte)
   return error_code != -1;
 }
 
+static void
+assert_str_sanity (const char *str)
+{
+  int c;
+  int len = 0;
+
+  while ((c = get_user (str)) != 0)
+    {
+      /* TODO: set reasonable limit for len */
+      if (c == -1 || len > 255)
+        __exit (-1);
+      len++;
+      str++;
+    }
+
+  if (!is_user_vaddr (--str))
+    __exit (-1);
+}
+
 void
 syscall_init (void) 
 {
+  lock_init (&syscall_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -87,6 +124,7 @@ syscall_handler (struct intr_frame *f)
 
   sys_num = AW (uint32_t, *esp);
 
+  lock_acquire (&syscall_lock);
   switch (sys_num)
     {
     case SYS_HALT:
@@ -96,7 +134,11 @@ syscall_handler (struct intr_frame *f)
       CALL_1 (__exit, *esp, int);
       break;
     case SYS_EXEC:
+      CALL_1 (__exec, *esp, char *);
+      break;
     case SYS_WAIT:
+      CALL_1 (__wait, *esp, pid_t);
+      break;
     case SYS_CREATE:
     case SYS_REMOVE:
     case SYS_OPEN:
@@ -117,6 +159,7 @@ syscall_handler (struct intr_frame *f)
     default :
       thread_exit ();
     }
+  lock_release (&syscall_lock);
 }
 
 /* (START) system call wrappers implementation */
@@ -142,11 +185,26 @@ int __write (int fd, const void *buffer, unsigned size)
   return size;
 }
 
-void __exit (int status)
+void
+__exit (int status)
 {
   struct thread *t = thread_current ();
 
   t->val = status;
   thread_exit();
+}
+
+int
+__exec (const char *file)
+{
+  assert_str_sanity (file);
+
+  return process_execute (file);
+}
+
+int
+__wait (pid_t pid)
+{
+  return process_wait ((tid_t) pid);
 }
 /* (END  ) system call wrappers implementation */

@@ -128,6 +128,9 @@ process_wait (tid_t child_tid)
           return val;
         }
     }
+
+  end_interthread_action ();
+
   return -1;
 }
 

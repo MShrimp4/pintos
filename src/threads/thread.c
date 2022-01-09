@@ -77,7 +77,7 @@ static void kernel_thread (thread_func *, void *aux);
 
 static void decay_recent_cpu (struct thread *t, ffloat *decay_factor);
 static void update_pri (struct thread *t, void *none UNUSED);
-void update_recent_cpu (void);
+static bool update_recent_cpu (void);
 
 static void set_pri (struct thread *t, int new_priority);
 static int  get_pri (struct thread *t);
@@ -154,8 +154,6 @@ thread_start (void)
 static void
 decay_recent_cpu (struct thread *t, ffloat *decay_factor)
 {
-  ASSERT (is_thread (t));
-
   t->recent_cpu = f_add (f_mul (*decay_factor, t->recent_cpu), FFLOAT (t->nice));
 }
 
@@ -183,36 +181,31 @@ update_pri (struct thread *t, void *none UNUSED)
     }
 }
 
-static void print_stat (struct thread *t, void *none UNUSED)
-{
-  if (t->tid != 2) /* Ignore IDLE */
-    printf("[%lld]: %d(%s) PRI=%d, RCPU=%d\n",timer_ticks() , t->tid, t->name, t->priority, F_TOINT (t->recent_cpu));
-}
-
-void
+static bool
 update_recent_cpu ()
 {
-  ffloat decay_factor, avg_2;
+  ffloat decay_factor;
+  int64_t time = timer_ticks ();
   struct thread *t = thread_current ();
-
-  ASSERT (thread_mlfqs);
 
   t->recent_cpu = f_add (t->recent_cpu, FFLOAT (1));
 
-  if (timer_ticks() % 4 == 0)
-    {
-      //thread_foreach ((thread_action_func *) print_stat, NULL);
-      thread_foreach ((thread_action_func *) update_pri, NULL);
-    }
+  bool   update_priority = (time % 4 == 0);
+  if (update_priority)
+    thread_foreach ((thread_action_func *) update_pri, NULL);
 
-  if (timer_ticks() % TIMER_FREQ == 0)
+  if (time % TIMER_FREQ == 0)
     {
-      avg_2 = f_mul (load_avg, FFLOAT (2));
-        decay_factor = f_div (avg_2, f_add (avg_2, FFLOAT (1)));
-      load_avg     = f_add (f_mul (f_div (FFLOAT (59), FFLOAT (60)), load_avg),
-                            f_div (FFLOAT (ready_threads), FFLOAT (60)));
+      decay_factor = f_div (load_avg,
+                            f_add (load_avg, f_div (FFLOAT (1), FFLOAT (2))));
+        load_avg     = f_div
+                         (f_add (f_mul (FFLOAT (59), load_avg),
+                                 FFLOAT (ready_threads)),
+                          FFLOAT (60));
       thread_foreach ((thread_action_func *) decay_recent_cpu, &decay_factor);
     }
+
+  return update_priority;
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -233,7 +226,8 @@ thread_tick (void)
     kernel_ticks++;
 
   if (thread_mlfqs)
-    update_recent_cpu ();
+    if (update_recent_cpu ())
+      intr_yield_on_return ();
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)

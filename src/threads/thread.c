@@ -755,6 +755,7 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init (&t->child);
   t->return_val = NULL;
   t->val        = 0;
+  t->next_fd    = 3;
 #endif /* USERPROG */
 
   old_level = intr_disable ();

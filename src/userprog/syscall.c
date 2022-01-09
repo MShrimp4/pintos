@@ -147,7 +147,7 @@ syscall_handler (struct intr_frame *f)
     case SYS_FILESIZE:
     case SYS_READ:
       PANIC ("%d : not implemented\n", *(uint32_t *)f->esp);
-      thread_exit ();
+      __exit (-1);
       break;
     case SYS_WRITE:
       f->eax = CALL_3 (__write, *esp, int, void *, unsigned);
@@ -191,6 +191,10 @@ void
 __exit (int status)
 {
   struct thread *t = thread_current ();
+
+  /* Release syscall global lock since it will exit */
+  if (lock_held_by_current_thread (&syscall_lock))
+    lock_release (&syscall_lock);
 
   t->val = status;
   thread_exit();

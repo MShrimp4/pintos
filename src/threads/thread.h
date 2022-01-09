@@ -118,6 +118,7 @@ struct thread
     struct list file;                   /* File list */
     struct list child;                  /* Child list (elem: return_value) */
     int val;                            /* Return value kept before exit() */
+    int next_fd;                        /* Next file descriptor */
     struct return_value *return_val;    /* Pointer of return_value struct */
 #endif
 

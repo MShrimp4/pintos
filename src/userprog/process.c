@@ -152,7 +152,7 @@ free_subthread_list (struct thread *t)
           list_remove (&r->lock.elem);
         }
 
-      free (e);
+      free (r);
       e = next;
     }
 

@@ -44,15 +44,15 @@ FAIL tests/userprog/write-bad-fd
 FAIL tests/userprog/exec-once
 FAIL tests/userprog/exec-arg
 FAIL tests/userprog/exec-bound
-FAIL tests/userprog/exec-bound-2
-FAIL tests/userprog/exec-bound-3
+pass tests/userprog/exec-bound-2
+pass tests/userprog/exec-bound-3
 FAIL tests/userprog/exec-multiple
 FAIL tests/userprog/exec-missing
-FAIL tests/userprog/exec-bad-ptr
+pass tests/userprog/exec-bad-ptr
 FAIL tests/userprog/wait-simple
 FAIL tests/userprog/wait-twice
 FAIL tests/userprog/wait-killed
-FAIL tests/userprog/wait-bad-pid
+pass tests/userprog/wait-bad-pid
 FAIL tests/userprog/multi-recurse
 FAIL tests/userprog/multi-child-fd
 FAIL tests/userprog/rox-simple
@@ -78,4 +78,4 @@ FAIL tests/filesys/base/sm-seq-random
 FAIL tests/filesys/base/syn-read
 FAIL tests/filesys/base/syn-remove
 FAIL tests/filesys/base/syn-write
-62 of 80 tests failed.
+58 of 80 tests failed.

@@ -105,7 +105,7 @@ assert_str_sanity (const char *str)
       str++;
     }
 
-  if (!is_user_vaddr (--str))
+  if (!is_user_vaddr (str))
     __exit (-1);
 }
 
@@ -129,9 +129,11 @@ syscall_handler (struct intr_frame *f)
     {
     case SYS_HALT:
       shutdown_power_off ();
+      NOT_REACHED ();
       break;
     case SYS_EXIT:
       CALL_1 (__exit, *esp, int);
+      NOT_REACHED ();
       break;
     case SYS_EXEC:
       CALL_1 (__exec, *esp, char *);
@@ -157,7 +159,7 @@ syscall_handler (struct intr_frame *f)
       thread_exit ();
       break;
     default :
-      thread_exit ();
+      __exit (-1);
     }
   lock_release (&syscall_lock);
 }

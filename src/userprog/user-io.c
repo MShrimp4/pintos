@@ -29,6 +29,8 @@ static int  get_fd      (void);
 static struct user_file *alloc_user_file (void);
 static struct user_file *find_user_file (int fd);
 
+static bool io_create   (const char *file, unsigned initial_size);
+static bool io_remove   (const char *file);
 static int  io_open     (const char *file);
 static int  io_filesize (int fd);
 static int  io_read     (int fd, void *buf, unsigned size);
@@ -76,6 +78,18 @@ find_user_file (int fd)
     }
 
   return NULL;
+}
+
+static bool
+io_create (const char *file, unsigned initial_size)
+{
+  return filesys_create (file, initial_size);
+}
+
+static bool
+io_remove (const char *file)
+{
+  return filesys_remove (file);
 }
 
 static int
@@ -206,6 +220,26 @@ user_io_close_all (void)
 
       e = next;
     }
+}
+
+bool
+user_io_create (const char *file, unsigned initial_size)
+{
+  bool result;
+  lock_acquire (&io_lock);
+  result = io_create (file, initial_size);
+  lock_release (&io_lock);
+  return result;
+}
+
+bool
+user_io_remove (const char *file)
+{
+  bool result;
+  lock_acquire (&io_lock);
+  result = io_remove (file);
+  lock_release (&io_lock);
+  return result;
 }
 
 int

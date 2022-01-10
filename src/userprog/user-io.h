@@ -1,10 +1,14 @@
 #ifndef USERPROG_USER_IO_H
 #define USERPROG_USER_IO_H
 
+#include <stdbool.h>
+
 void user_io_init      (void);
 void user_io_block     (void);
 void user_io_release   (void);
 void user_io_close_all (void);
+bool user_io_create    (const char *file, unsigned initial_size);
+bool user_io_remove    (const char *file);
 int  user_io_open      (const char *file);
 int  user_io_filesize  (int fd);
 int  user_io_read      (int fd, void *buf, unsigned size);

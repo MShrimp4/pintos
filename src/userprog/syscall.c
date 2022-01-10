@@ -26,7 +26,7 @@ static int   get_user (const uint8_t *uaddr);
 static bool  put_user (uint8_t *udst, uint8_t byte);
 static bool  try_movl  (const uint32_t *src, uint32_t *dest);
 static void *safe_movl (const uint32_t *src);
-static void  assert_arr_sanity (const char *str);
+static void  assert_arr_sanity (const uint8_t *arr, unsigned size);
 static void  assert_str_sanity (const char *str);
 /* (END  ) Memory sanity check functions */
 
@@ -36,11 +36,11 @@ static void  assert_str_sanity (const char *str);
 void __exit (int status) NO_RETURN;
 int  __exec (const char *file);
 int  __wait (pid_t);
-/* bool create (const char *file, unsigned initial_size); */
-/* bool remove (const char *file); */
+bool __create (const char *file, unsigned initial_size);
+bool __remove (const char *file);
 int  __open (const char *file);
 /* int filesize (int fd); */
-/* int read (int fd, void *buffer, unsigned length); */
+int  __read (int fd, void *buffer, unsigned length);
 int  __write (int fd, const void *buffer, unsigned size);
 /* void seek (int fd, unsigned position); */
 /* unsigned tell (int fd); */
@@ -98,6 +98,19 @@ put_user (uint8_t *udst, uint8_t byte)
 }
 
 static void
+assert_arr_sanity (const uint8_t *arr, unsigned size)
+{
+  if (arr == NULL)
+    __exit (-1);
+
+  if (get_user ((void *)arr) == -1 || get_user ((void *)(arr +size-1)) == -1)
+    __exit (-1);
+
+  if (!is_user_vaddr (arr + size-1))
+    __exit (-1);
+}
+
+static void
 assert_str_sanity (const char *str)
 {
   int c;
@@ -152,11 +165,11 @@ syscall_handler (struct intr_frame *f)
       f->eax = CALL_1 (__wait, *esp, pid_t);
       break;
     case SYS_CREATE:
-      PANIC ("%d : not implemented\n", *(uint32_t *)f->esp);
-      __exit (-1);
+      f->eax = CALL_2 (__create, *esp, char *, unsigned);
+      break;
     case SYS_REMOVE:
-      PANIC ("%d : not implemented\n", *(uint32_t *)f->esp);
-      __exit (-1);
+      f->eax = CALL_1 (__remove, *esp, char *);
+      break;
     case SYS_OPEN:
       f->eax = CALL_1 (__open, *esp, char *);
       break;
@@ -164,8 +177,7 @@ syscall_handler (struct intr_frame *f)
       PANIC ("%d : not implemented\n", *(uint32_t *)f->esp);
       __exit (-1);
     case SYS_READ:
-      PANIC ("%d : not implemented\n", *(uint32_t *)f->esp);
-      __exit (-1);
+      f->eax = CALL_3 (__read, *esp, int, void *, unsigned);
       break;
     case SYS_WRITE:
       f->eax = CALL_3 (__write, *esp, int, void *, unsigned);
@@ -186,27 +198,6 @@ syscall_handler (struct intr_frame *f)
 }
 
 /* (START) system call wrappers implementation */
-
-int __write (int fd, const void *buffer, unsigned size)
-{
-  const char *buf = buffer;
-
-  if (fd != STDOUT_FILENO)
-    {
-      printf ("write() other than STDOUT not implemented (fd = %d)\n", fd);
-      __exit (-1);
-    }
-
-  /* Sloppy implementation, I know. (TODO) */
-  if (is_user_vaddr (buf + size -1)
-      && get_user ((void *) buf) != -1
-      && get_user ((void *) (buf + size -1)) != -1)
-    putbuf (buf, size);
-  else
-    __exit (-1);
-
-  return size;
-}
 
 void
 __exit (int status)
@@ -235,11 +226,55 @@ __wait (pid_t pid)
   return process_wait ((tid_t) pid);
 }
 
+
+bool
+__create (const char *file, unsigned initial_size)
+{
+  assert_str_sanity (file);
+
+  return user_io_create (file, initial_size);
+}
+
+bool
+__remove (const char *file)
+{
+  assert_str_sanity (file);
+
+  return user_io_remove (file);
+}
+
 int __open (const char *file)
 {
   assert_str_sanity (file);
 
   return user_io_open (file);
+}
+
+int
+__read (int fd, void *buffer, unsigned length)
+{
+  assert_arr_sanity (buffer, length);
+
+  return user_io_read (fd, buffer, length);
+}
+
+int
+__write (int fd, const void *buffer, unsigned size)
+{
+  const char *buf = buffer;
+
+  assert_arr_sanity (buffer, size);
+
+  /* TODO: move implementation to user-io */
+  if (fd == STDIN_FILENO)
+    return 0;
+  else if (fd == STDOUT_FILENO)
+    {
+      putbuf (buf, size);
+      return size;
+    }
+  else
+    return user_io_write (fd, buffer, size);
 }
 
 void __close (int fd)

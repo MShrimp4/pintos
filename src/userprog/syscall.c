@@ -12,8 +12,6 @@
 
 typedef int pid_t;
 
-static struct lock syscall_lock;
-
 #define AW(T,PTR)              *((T *) safe_movl (PTR))
 #define CALL_1(F,PTR,T1)       (F) (AW(T1,(PTR)+1))
 #define CALL_2(F,PTR,T1,T2)    (F) (AW(T1,(PTR)+1), AW(T2,(PTR)+2))
@@ -135,7 +133,6 @@ assert_str_sanity (const char *str)
 void
 syscall_init (void) 
 {
-  lock_init (&syscall_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -147,7 +144,6 @@ syscall_handler (struct intr_frame *f)
 
   sys_num = AW (uint32_t, *esp);
 
-  lock_acquire (&syscall_lock);
   switch (sys_num)
     {
     case SYS_HALT:
@@ -194,7 +190,6 @@ syscall_handler (struct intr_frame *f)
     default :
       __exit (-1);
     }
-  lock_release (&syscall_lock);
 }
 
 /* (START) system call wrappers implementation */
@@ -203,10 +198,6 @@ void
 __exit (int status)
 {
   struct thread *t = thread_current ();
-
-  /* Release syscall global lock since it will exit */
-  if (lock_held_by_current_thread (&syscall_lock))
-    lock_release (&syscall_lock);
 
   t->val = status;
   thread_exit();

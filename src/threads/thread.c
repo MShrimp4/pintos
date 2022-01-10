@@ -530,6 +530,7 @@ thread_update_donation (struct thread *t)
   ASSERT (!thread_is_sleeping (t));
   ASSERT (!list_is_head (&t->elem));
 
+  struct thread *holder;
   int priority = get_pri (t);
   struct list_elem *e = list_prev (&t->elem);
 
@@ -540,24 +541,24 @@ thread_update_donation (struct thread *t)
 
   struct semaphore *sema = list_entry (e, struct semaphore, waiters.head);
 
-  if (sema->last_holder == NULL)
+  if (sema->holder == NULL)
     return;
 
-  ASSERT (is_thread (sema->last_holder));
+  ASSERT (is_thread (holder = *sema->holder));
 
-  thread_donate_priority (sema->last_holder, priority);
+  thread_donate_priority (holder, priority);
 
-  if (sema->last_holder->status == THREAD_BLOCKED
-      && !thread_is_sleeping (sema->last_holder))
+  if (holder->status == THREAD_BLOCKED
+      && !thread_is_sleeping (holder))
     {
-      e = &sema->last_holder->elem;
+      e = &holder->elem;
       struct list_elem *next_head = list_find_head(e);
       struct semaphore *next_sema
         = list_entry (next_head, struct semaphore, waiters.head);
       list_remove (e);
       list_insert_ordered (&next_sema->waiters, e,
                            (list_less_func *) sort_pri_descending, NULL);
-      thread_update_donation (sema->last_holder);
+      thread_update_donation (holder);
     }
 }
 

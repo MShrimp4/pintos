@@ -8,7 +8,7 @@
 struct semaphore 
   {
     unsigned value;             /* Current value. */
-    struct thread * last_holder;/* Used to donate priority */
+    struct thread **holder;     /* Used to donate priority */
     struct list waiters;        /* List of waiting threads. */
   };
 

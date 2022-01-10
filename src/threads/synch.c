@@ -46,8 +46,8 @@ sema_init (struct semaphore *sema, unsigned value)
 {
   ASSERT (sema != NULL);
 
-  sema->last_holder = NULL;
   sema->value = value;
+  sema->holder = NULL;
   list_init (&sema->waiters);
 }
 
@@ -75,7 +75,6 @@ sema_down (struct semaphore *sema)
       thread_update_donation (thread_current ());
       thread_block ();
     }
-  sema->last_holder = thread_current ();
   sema->value--;
   intr_set_level (old_level);
 }
@@ -96,7 +95,6 @@ sema_try_down (struct semaphore *sema)
   old_level = intr_disable ();
   if (sema->value > 0) 
     {
-      sema->last_holder = thread_current ();
       sema->value--;
       success = true;
     }
@@ -122,8 +120,6 @@ sema_up (struct semaphore *sema)
   if (!list_empty (&sema->waiters)) 
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
                                 struct thread, elem));
-  if (!intr_context () && sema->last_holder == thread_current ())
-    sema->last_holder = NULL;
   thread_recover_donation ();
   sema->value++;
   intr_set_level (old_level);
@@ -191,6 +187,7 @@ lock_init (struct lock *lock)
 
   lock->holder = NULL;
   sema_init (&lock->semaphore, 1);
+  lock->semaphore.holder = &lock->holder;
 }
 
 void

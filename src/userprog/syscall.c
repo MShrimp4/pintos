@@ -31,18 +31,18 @@ static void  assert_str_sanity (const char *str);
 /* (START) system call wrappers prototype */
 
 /* void halt (void) NO_RETURN; */
-void __exit (int status) NO_RETURN;
-int  __exec (const char *file);
-int  __wait (pid_t);
-bool __create (const char *file, unsigned initial_size);
-bool __remove (const char *file);
-int  __open (const char *file);
-/* int filesize (int fd); */
-int  __read (int fd, void *buffer, unsigned length);
-int  __write (int fd, const void *buffer, unsigned size);
-/* void seek (int fd, unsigned position); */
-/* unsigned tell (int fd); */
-void __close (int fd);
+static void __exit (int status) NO_RETURN;
+static int  __exec (const char *file);
+static int  __wait (pid_t);
+static bool __create (const char *file, unsigned initial_size);
+static bool __remove (const char *file);
+static int  __open (const char *file);
+static int  __filesize (int fd);
+static int  __read (int fd, void *buffer, unsigned length);
+static int  __write (int fd, const void *buffer, unsigned size);
+static void __seek (int fd, unsigned position);
+static unsigned __tell (int fd);
+static void __close (int fd);
 
 /* (END  ) system call wrappers prototype */
 
@@ -112,22 +112,16 @@ static void
 assert_str_sanity (const char *str)
 {
   int c;
-  int len = 0;
 
   if (str == NULL)
     __exit (-1);
 
   while ((c = get_user (str)) != 0)
     {
-      /* TODO: set reasonable limit for len */
-      if (c == -1 || len > 255)
+      if (c == -1 || !is_user_vaddr (str))
         __exit (-1);
-      len++;
       str++;
     }
-
-  if (!is_user_vaddr (str))
-    __exit (-1);
 }
 
 void
@@ -170,8 +164,8 @@ syscall_handler (struct intr_frame *f)
       f->eax = CALL_1 (__open, *esp, char *);
       break;
     case SYS_FILESIZE:
-      PANIC ("%d : not implemented\n", *(uint32_t *)f->esp);
-      __exit (-1);
+      f->eax = CALL_1 (__filesize, *esp, int);
+      break;
     case SYS_READ:
       f->eax = CALL_3 (__read, *esp, int, void *, unsigned);
       break;
@@ -179,11 +173,11 @@ syscall_handler (struct intr_frame *f)
       f->eax = CALL_3 (__write, *esp, int, void *, unsigned);
       break;
     case SYS_SEEK:
-      PANIC ("%d : not implemented\n", *(uint32_t *)f->esp);
-      __exit (-1);
+      CALL_2 (__seek, *esp, int, unsigned);
+      break;
     case SYS_TELL:
-      PANIC ("%d : not implemented\n", *(uint32_t *)f->esp);
-      __exit (-1);
+      f->eax = CALL_1 (__tell, *esp, int);
+      break;
     case SYS_CLOSE:
       CALL_1 (__close, *esp, int);
       break;
@@ -194,7 +188,7 @@ syscall_handler (struct intr_frame *f)
 
 /* (START) system call wrappers implementation */
 
-void
+static void
 __exit (int status)
 {
   struct thread *t = thread_current ();
@@ -203,7 +197,7 @@ __exit (int status)
   thread_exit();
 }
 
-int
+static int
 __exec (const char *file)
 {
   assert_str_sanity (file);
@@ -211,14 +205,14 @@ __exec (const char *file)
   return process_execute (file);
 }
 
-int
+static int
 __wait (pid_t pid)
 {
   return process_wait ((tid_t) pid);
 }
 
 
-bool
+static bool
 __create (const char *file, unsigned initial_size)
 {
   assert_str_sanity (file);
@@ -226,7 +220,7 @@ __create (const char *file, unsigned initial_size)
   return user_io_create (file, initial_size);
 }
 
-bool
+static bool
 __remove (const char *file)
 {
   assert_str_sanity (file);
@@ -234,14 +228,22 @@ __remove (const char *file)
   return user_io_remove (file);
 }
 
-int __open (const char *file)
+static int
+__open (const char *file)
 {
   assert_str_sanity (file);
 
   return user_io_open (file);
 }
 
-int
+
+static int
+__filesize (int fd)
+{
+  return user_io_filesize (fd);
+}
+
+static int
 __read (int fd, void *buffer, unsigned length)
 {
   assert_arr_sanity (buffer, length);
@@ -249,7 +251,7 @@ __read (int fd, void *buffer, unsigned length)
   return user_io_read (fd, buffer, length);
 }
 
-int
+static int
 __write (int fd, const void *buffer, unsigned size)
 {
   const char *buf = buffer;
@@ -268,7 +270,20 @@ __write (int fd, const void *buffer, unsigned size)
     return user_io_write (fd, buffer, size);
 }
 
-void __close (int fd)
+static void
+__seek (int fd, unsigned position)
+{
+  return user_io_seek (fd, position);
+}
+
+static unsigned
+__tell (int fd)
+{
+  return user_io_tell (fd);
+}
+
+static void
+__close (int fd)
 {
   return user_io_close (fd);
 }

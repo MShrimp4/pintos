@@ -47,11 +47,11 @@ process_execute (const char *arg_str)
 
   const char *fp;
   for (fp = arg_str; !isspace (*fp); fp++);
-  file_name_len = (fp - arg_str) + 1;
-  if (NULL == (file_name = malloc (file_name_len)))
+  file_name_len = (fp - arg_str);
+  if (NULL == (file_name = malloc (file_name_len+1)))
     return TID_ERROR;
   memcpy (file_name, arg_str, file_name_len);
-  file_name[file_name_len -1] = '\0';
+  file_name[file_name_len] = '\0';
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, arg_copy);
@@ -79,8 +79,11 @@ start_process (void *arg_str_)
 
   /* If load failed, quit. */
   palloc_free_page (arg_str);
-  if (!success) 
-    thread_exit ();
+  if (!success)
+    {
+      thread_current ()->val = -1;
+      thread_exit ();
+    }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in

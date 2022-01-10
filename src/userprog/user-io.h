@@ -17,4 +17,6 @@ void user_io_seek      (int fd, unsigned position);
 unsigned user_io_tell  (int fd);
 void user_io_close     (int fd);
 
+void user_io_deny_write (int fd);
+
 #endif /* USERPROG_USER_IO_H */

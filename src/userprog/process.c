@@ -354,6 +354,11 @@ load (char *arg_str, void (**eip) (void), void **esp)
   user_io_block ();
   file = filesys_open (file_name);
   user_io_release ();
+
+  /* Protect executable */
+  /* Released on exit */
+  user_io_deny_write (user_io_open (file_name));
+
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);

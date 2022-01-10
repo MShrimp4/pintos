@@ -1,5 +1,4 @@
 #include "userprog/syscall.h"
-#include <console.h>
 #include <stdio.h>
 #include <syscall-nr.h>
 #include "devices/shutdown.h"
@@ -116,7 +115,7 @@ assert_str_sanity (const char *str)
   if (str == NULL)
     __exit (-1);
 
-  while ((c = get_user (str)) != 0)
+  while ((c = get_user ((void *)str)) != 0)
     {
       if (c == -1 || !is_user_vaddr (str))
         __exit (-1);
@@ -133,7 +132,7 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-  uint32_t **esp = &f->esp;
+  uint32_t **esp = (void *) (&f->esp);
   uint32_t sys_num;
 
   sys_num = AW (uint32_t, *esp);
@@ -254,20 +253,9 @@ __read (int fd, void *buffer, unsigned length)
 static int
 __write (int fd, const void *buffer, unsigned size)
 {
-  const char *buf = buffer;
-
   assert_arr_sanity (buffer, size);
 
-  /* TODO: move implementation to user-io */
-  if (fd == STDIN_FILENO)
-    return 0;
-  else if (fd == STDOUT_FILENO)
-    {
-      putbuf (buf, size);
-      return size;
-    }
-  else
-    return user_io_write (fd, buffer, size);
+  return user_io_write (fd, buffer, size);
 }
 
 static void

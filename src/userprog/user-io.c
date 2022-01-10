@@ -1,6 +1,9 @@
 #include "userprog/user-io.h"
+#include <stdio.h>
+#include <console.h>
 #include <debug.h>
 #include <list.h>
+#include "devices/input.h"
 #include "threads/thread.h"
 #include "threads/synch.h"
 #include "threads/malloc.h"
@@ -39,6 +42,7 @@ static void io_seek     (int fd, unsigned position);
 static unsigned io_tell (int fd);
 static void io_close    (int fd);
 
+static void io_deny_write (int fd);
 
 
 /* Internal functions */
@@ -130,6 +134,17 @@ int  io_read     (int fd, void *buf, unsigned size)
 {
   struct user_file *ufile;
 
+
+  if (fd == STDIN_FILENO)
+    {
+      uint8_t *buffer = buf;
+      for (unsigned i=0; i<size; i++)
+        buffer[i] = input_getc ();
+      return size;
+    }
+  else if (fd == STDOUT_FILENO)
+    return -1;
+
   if ((ufile = find_user_file (fd)) == NULL)
     return -1; /* Specified by PintOS */
 
@@ -139,6 +154,14 @@ int  io_read     (int fd, void *buf, unsigned size)
 int  io_write    (int fd, const void *buf, unsigned size)
 {
   struct user_file *ufile;
+
+  if (fd == STDIN_FILENO)
+    return 0;
+  else if (fd == STDOUT_FILENO)
+    {
+      putbuf (buf, size);
+      return size;
+    }
 
   if ((ufile = find_user_file (fd)) == NULL)
     return 0; /* Nothing is written */
@@ -177,6 +200,16 @@ void io_close    (int fd)
   file_close (ufile->file);
   list_remove (&ufile->elem);
   free (ufile);
+}
+
+static void io_deny_write (int fd)
+{
+  struct user_file *ufile;
+
+  if ((ufile = find_user_file (fd)) == NULL)
+    return;
+
+  file_deny_write (ufile->file);
 }
 
 
@@ -295,7 +328,7 @@ user_io_tell (int fd)
 {
   unsigned position;
   lock_acquire (&io_lock);
-  io_tell (fd);
+  position = io_tell (fd);
   lock_release (&io_lock);
   return position;
 }
@@ -305,5 +338,13 @@ user_io_close (int fd)
 {
   lock_acquire (&io_lock);
   io_close (fd);
+  lock_release (&io_lock);
+}
+
+void
+user_io_deny_write (int fd)
+{
+  lock_acquire (&io_lock);
+  io_deny_write (fd);
   lock_release (&io_lock);
 }

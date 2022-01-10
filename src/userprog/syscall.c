@@ -7,6 +7,8 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "userprog/process.h"
+#include "userprog/user-io.h"
 
 typedef int pid_t;
 
@@ -19,12 +21,16 @@ static struct lock syscall_lock;
 
 static void syscall_handler (struct intr_frame *);
 
+/* (START) Memory sanity check functions */
+static int   get_user (const uint8_t *uaddr);
+static bool  put_user (uint8_t *udst, uint8_t byte);
 static bool  try_movl  (const uint32_t *src, uint32_t *dest);
 static void *safe_movl (const uint32_t *src);
+static void  assert_arr_sanity (const char *str);
 static void  assert_str_sanity (const char *str);
+/* (END  ) Memory sanity check functions */
 
 /* (START) system call wrappers prototype */
-
 
 /* void halt (void) NO_RETURN; */
 void __exit (int status) NO_RETURN;
@@ -32,13 +38,14 @@ int  __exec (const char *file);
 int  __wait (pid_t);
 /* bool create (const char *file, unsigned initial_size); */
 /* bool remove (const char *file); */
-/* int open (const char *file); */
+int  __open (const char *file);
 /* int filesize (int fd); */
 /* int read (int fd, void *buffer, unsigned length); */
 int  __write (int fd, const void *buffer, unsigned size);
 /* void seek (int fd, unsigned position); */
 /* unsigned tell (int fd); */
-/* void close (int fd); */
+void __close (int fd);
+
 /* (END  ) system call wrappers prototype */
 
 static bool
@@ -96,6 +103,9 @@ assert_str_sanity (const char *str)
   int c;
   int len = 0;
 
+  if (str == NULL)
+    __exit (-1);
+
   while ((c = get_user (str)) != 0)
     {
       /* TODO: set reasonable limit for len */
@@ -136,15 +146,23 @@ syscall_handler (struct intr_frame *f)
       NOT_REACHED ();
       break;
     case SYS_EXEC:
-      CALL_1 (__exec, *esp, char *);
+      f->eax = CALL_1 (__exec, *esp, char *);
       break;
     case SYS_WAIT:
-      CALL_1 (__wait, *esp, pid_t);
+      f->eax = CALL_1 (__wait, *esp, pid_t);
       break;
     case SYS_CREATE:
+      PANIC ("%d : not implemented\n", *(uint32_t *)f->esp);
+      __exit (-1);
     case SYS_REMOVE:
+      PANIC ("%d : not implemented\n", *(uint32_t *)f->esp);
+      __exit (-1);
     case SYS_OPEN:
+      f->eax = CALL_1 (__open, *esp, char *);
+      break;
     case SYS_FILESIZE:
+      PANIC ("%d : not implemented\n", *(uint32_t *)f->esp);
+      __exit (-1);
     case SYS_READ:
       PANIC ("%d : not implemented\n", *(uint32_t *)f->esp);
       __exit (-1);
@@ -153,10 +171,13 @@ syscall_handler (struct intr_frame *f)
       f->eax = CALL_3 (__write, *esp, int, void *, unsigned);
       break;
     case SYS_SEEK:
-    case SYS_TELL:
-    case SYS_CLOSE:
       PANIC ("%d : not implemented\n", *(uint32_t *)f->esp);
-      thread_exit ();
+      __exit (-1);
+    case SYS_TELL:
+      PANIC ("%d : not implemented\n", *(uint32_t *)f->esp);
+      __exit (-1);
+    case SYS_CLOSE:
+      CALL_1 (__close, *esp, int);
       break;
     default :
       __exit (-1);
@@ -168,7 +189,7 @@ syscall_handler (struct intr_frame *f)
 
 int __write (int fd, const void *buffer, unsigned size)
 {
-  char *buf = buffer;
+  const char *buf = buffer;
 
   if (fd != STDOUT_FILENO)
     {
@@ -213,4 +234,17 @@ __wait (pid_t pid)
 {
   return process_wait ((tid_t) pid);
 }
+
+int __open (const char *file)
+{
+  assert_str_sanity (file);
+
+  return user_io_open (file);
+}
+
+void __close (int fd)
+{
+  return user_io_close (fd);
+}
+
 /* (END  ) system call wrappers implementation */

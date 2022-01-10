@@ -9,6 +9,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/user-io.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -22,7 +23,7 @@
 
 static thread_func start_process NO_RETURN;
 static void free_subthread_list (struct thread *t);
-static void mark_exit_on_return_value (void);
+static void mark_exit_on_return_value (struct thread *t);
 static bool load (char *arg_str, void (**eip) (void), void **esp);
 
 /* Starts a new thread running a user program loaded from
@@ -160,9 +161,8 @@ free_subthread_list (struct thread *t)
 }
 
 static void
-mark_exit_on_return_value ()
+mark_exit_on_return_value (struct thread *t)
 {
-  struct thread *t = thread_current ();
   start_interthread_action ();
 
   if (t->return_val != NULL)
@@ -185,7 +185,8 @@ process_exit (void)
   printf ("%s: exit(%d)\n", cur->name, cur->val);
   /* Make process_exit get return value or add some way to keep return val */
   free_subthread_list (cur);
-  mark_exit_on_return_value ();
+  mark_exit_on_return_value (cur);
+  user_io_close_all ();
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -314,7 +315,9 @@ load (char *arg_str, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
+  user_io_block ();
   file = filesys_open (file_name);
+  user_io_release ();
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -404,7 +407,9 @@ load (char *arg_str, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
+  user_io_block ();
   file_close (file);
+  user_io_release ();
   return success;
 }
 

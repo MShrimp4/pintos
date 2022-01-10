@@ -115,10 +115,12 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    struct list file;                   /* File list */
-    struct list child;                  /* Child list (elem: return_value) */
-    int val;                            /* Return value kept before exit() */
+    /* Related to open() */
     int next_fd;                        /* Next file descriptor */
+    struct list file;                   /* File list */
+    /* Related to exit() */
+    int val;                            /* Return value kept before exit() */
+    struct list child;                  /* Child list (elem: return_value) */
     struct return_value *return_val;    /* Pointer of return_value struct */
 #endif
 

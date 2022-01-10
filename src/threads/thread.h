@@ -25,7 +25,7 @@ typedef int tid_t;
 #ifdef USERPROG
 struct return_value
 {
-  struct lock      lock;   /* Used for process_wait */
+  struct semaphore sema;   /* Used for process_wait */
   struct thread   *thread; /* The thread */
   int              value;  /* Return value. */
   tid_t            tid;    /* Thread ID, used after thread has died */

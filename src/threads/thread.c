@@ -284,8 +284,7 @@ thread_create (const char *name, int priority,
     struct return_value *rval = malloc (sizeof (struct return_value));
     if (rval == NULL)
       PANIC ("Failed to allocate return value storage");
-    lock_init (&rval->lock);
-    lock_acquire_for (&rval->lock, t);
+    sema_init (&rval->sema, 0);
     rval->tid    = t->tid;
     rval->thread = t;
     rval->value  = t->val = 0;

@@ -26,6 +26,10 @@ static void free_subthread_list (struct thread *t);
 static void mark_exit_on_return_value (struct thread *t);
 static bool load (char *arg_str, void (**eip) (void), void **esp);
 
+static struct return_value *
+find_thread_return_value (tid_t tid);
+static tid_t process_wait_load (tid_t child_tid);
+
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -58,7 +62,7 @@ process_execute (const char *arg_str)
   free (file_name);
   if (tid == TID_ERROR)
     palloc_free_page (arg_copy); 
-  return tid;
+  return process_wait_load (tid);
 }
 
 /* A thread function that loads a user process and starts it
@@ -85,6 +89,8 @@ start_process (void *arg_str_)
       thread_exit ();
     }
 
+  sema_up (&thread_current ()->return_val->sema);
+
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -93,6 +99,51 @@ start_process (void *arg_str_)
      and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
+}
+
+static struct return_value *
+find_thread_return_value (tid_t tid)
+{
+  struct thread *t = thread_current ();
+
+  start_interthread_action ();
+  for (struct list_elem *e = list_begin (&t->child);
+       e != list_end (&t->child);
+       e = list_next (e))
+    {
+      struct return_value *r = list_entry (e, struct return_value, elem);
+
+      if (r->tid == tid)
+        {
+          end_interthread_action ();
+          return r;
+        }
+    }
+
+  end_interthread_action ();
+
+  return NULL;
+}
+
+static tid_t
+process_wait_load (tid_t child_tid)
+{
+  struct return_value *r = find_thread_return_value (child_tid);
+  bool load_success = false;
+
+  if (r == NULL)
+    return -1;
+
+  sema_down (&r->sema);
+  start_interthread_action ();
+  /* (return value is sane) || (Already finished) */
+  load_success = (r->value != -1) || (r->sema.value == 1);
+  end_interthread_action ();
+
+  if (load_success)
+    return child_tid;
+  else
+    return -1;
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
@@ -107,35 +158,21 @@ start_process (void *arg_str_)
 int
 process_wait (tid_t child_tid)
 {
-  struct thread *t = thread_current ();
+  struct return_value *r = find_thread_return_value (child_tid);
+  int val;
 
+  if (r == NULL)
+    return -1;
+
+  sema_down (&r->sema);
   start_interthread_action ();
-  for (struct list_elem *e = list_begin (&t->child);
-       e != list_end (&t->child);
-       e = list_next (e))
-    {
-      struct return_value *r = list_entry (e, struct return_value, elem);
-
-      if (r->tid == child_tid)
-        {
-          end_interthread_action ();
-          lock_acquire (&r->lock);
-
-          ASSERT (r->thread == NULL);
-          start_interthread_action ();
-          lock_release (&r->lock);
-          int val = r->value;
-
-          list_remove (e);
-          end_interthread_action ();
-          free (r);
-          return val;
-        }
-    }
-
+  ASSERT (r->thread == NULL);
+  val = r->value;
+  list_remove (&r->elem);
+  free (r);
   end_interthread_action ();
 
-  return -1;
+  return val;
 }
 
 static void
@@ -150,11 +187,7 @@ free_subthread_list (struct thread *t)
       struct return_value *r = list_entry (e, struct return_value, elem);
 
       if (r->thread != NULL)
-        {
-          r->thread->return_val = NULL;
-          /* No need to unlock this one */
-          list_remove (&r->lock.elem);
-        }
+        r->thread->return_val = NULL;
 
       free (r);
       e = next;
@@ -172,7 +205,7 @@ mark_exit_on_return_value (struct thread *t)
     {
       t->return_val->thread = NULL;
       t->return_val->value  = t->val;
-      lock_release (&t->return_val->lock);
+      sema_up (&t->return_val->sema);
     }
 
   end_interthread_action ();

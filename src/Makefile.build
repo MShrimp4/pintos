@@ -11,7 +11,7 @@ include ../../tests/Make.tests
 # Compiler and assembler options.
 kernel.bin: CPPFLAGS += -I$(SRCDIR)/lib/kernel
 
-CPPFLAGS += -Wframe-larger-than=128 -std=gnu99
+CPPFLAGS += -std=gnu99 #-Wframe-larger-than=128
 
 # Core kernel.
 threads_SRC  = threads/start.S		# Startup code.
@@ -67,6 +67,7 @@ userprog_SRC += userprog/user-io.c	#User I/O
 
 # No virtual memory code yet.
 #vm_SRC = vm/file.c			# Some file.
+vm_SRC = vm/swap-alloc.c                # Swap storage and load
 
 # Filesystem code.
 filesys_SRC  = filesys/filesys.c	# Filesystem core.

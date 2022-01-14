@@ -14,5 +14,9 @@ void pagedir_set_dirty (uint32_t *pd, const void *upage, bool dirty);
 bool pagedir_is_accessed (uint32_t *pd, const void *upage);
 void pagedir_set_accessed (uint32_t *pd, const void *upage, bool accessed);
 void pagedir_activate (uint32_t *pd);
+#ifdef VM
+void pagedir_save_to_swap (uint32_t *pd, const void *vpage);
+bool pagedir_load_from_swap (uint32_t *pd, void *vpage);
+#endif /* VM */
 
 #endif /* userprog/pagedir.h */

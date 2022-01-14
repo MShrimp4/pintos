@@ -97,6 +97,28 @@ static inline uint32_t pte_create_user (void *page, bool writable) {
   return pte_create_kernel (page, writable) | PTE_U;
 }
 
+static inline uint32_t pte_set_as_swap (uint32_t pte, size_t swap_idx) {
+  ASSERT ((swap_idx << 12) >> 12 == swap_idx);
+  return (swap_idx << 12) | (((pte & ~PTE_ADDR) & ~PTE_P) | PTE_AVL);
+}
+
+static inline uint32_t pte_set_as_page (uint32_t pte, void *page) {
+  ASSERT ((pte & PTE_AVL) != 0);
+  return vtop (page) | PTE_P | ((pte & ~PTE_ADDR) & ~PTE_AVL);
+}
+
+static inline size_t pte_get_swap_idx (uint32_t pte) {
+  return (pte & PTE_ADDR) >> 12;
+}
+
+static inline bool pte_is_swapped (uint32_t pte) {
+  return (pte & PTE_AVL) && !(pte & PTE_P);
+}
+
+static inline bool pte_is_user (uint32_t pte) {
+  return !!(pte & PTE_U);
+}
+
 /* Returns a pointer to the page that page table entry PTE points
    to. */
 static inline void *pte_get_page (uint32_t pte) {

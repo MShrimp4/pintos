@@ -20,7 +20,7 @@ static void syscall_handler (struct intr_frame *);
 
 /* (START) Memory sanity check functions */
 static int   get_user (const uint8_t *uaddr);
-static bool  put_user (uint8_t *udst, uint8_t byte);
+static bool  put_user (uint8_t *udst, uint8_t byte) UNUSED;
 static bool  try_movl  (const uint32_t *src, uint32_t *dest);
 static void *safe_movl (const uint32_t *src);
 static void  assert_arr_sanity (const uint8_t *arr, unsigned size);

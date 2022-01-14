@@ -5,6 +5,9 @@
 #include "threads/init.h"
 #include "threads/pte.h"
 #include "threads/palloc.h"
+#ifdef VM
+#include "vm/swap-alloc.h"
+#endif /* VM */
 
 static uint32_t *active_pd (void);
 static void invalidate_pagedir (uint32_t *);
@@ -213,6 +216,41 @@ pagedir_set_accessed (uint32_t *pd, const void *vpage, bool accessed)
         }
     }
 }
+
+#ifdef VM
+void
+pagedir_save_to_swap (uint32_t *pd, const void *vpage)
+{
+  uint32_t *pte = lookup_page (pd, vpage, false);
+  uint32_t *page;
+  size_t    swap;
+
+  ASSERT (pte != NULL && !pte_is_swapped (*pte));
+
+  page = pte_get_page (*pte);
+  swap = swap_store_page (vpage);
+  ASSERT (swap_is_valid (swap));
+  palloc_free_page (page);
+  *pte = pte_set_as_swap (*pte, swap);
+}
+
+bool
+pagedir_load_from_swap (uint32_t *pd, void *vpage)
+{
+  uint32_t *pte = lookup_page (pd, vpage, false);
+  uint32_t *page;
+  size_t    swap;
+
+  if (pte == NULL || !pte_is_swapped (*pte))
+    return false;
+
+  swap = pte_get_swap_idx (*pte);
+  page = palloc_get_page (pte_is_user (*pte) ? PAL_USER : 0);
+  *pte = pte_set_as_page (*pte, page);
+  swap_load_page (swap, vpage);
+  return true;
+}
+#endif /* VM */
 
 /* Loads page directory PD into the CPU's page directory base
    register. */

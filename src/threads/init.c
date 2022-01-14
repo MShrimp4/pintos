@@ -38,6 +38,9 @@
 #include "filesys/filesys.h"
 #include "filesys/fsutil.h"
 #endif
+#ifdef VM
+#include "vm/swap-alloc.h"
+#endif
 
 /* Page directory with kernel mappings only. */
 uint32_t *init_page_dir;
@@ -127,7 +130,10 @@ main (void)
   ide_init ();
   locate_block_devices ();
   filesys_init (format_filesys);
-#endif
+#ifdef VM
+  swap_init ();
+#endif /* VM */
+#endif /* FILESYS */
 
   printf ("Boot complete.\n");
   

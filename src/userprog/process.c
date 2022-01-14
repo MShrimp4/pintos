@@ -21,6 +21,10 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+#ifdef VM
+#include "vm/swap-alloc.h"
+#endif
+
 static thread_func start_process NO_RETURN;
 static void free_subthread_list (struct thread *t);
 static void mark_exit_on_return_value (struct thread *t);
@@ -440,6 +444,11 @@ load (char *arg_str, void (**eip) (void), void **esp)
   /* Set up stack. */
   if (!setup_stack (esp, arg_str))
     goto done;
+
+#ifdef VM
+  pagedir_save_to_swap (t->pagedir, ((uint8_t *) PHYS_BASE) - PGSIZE);
+  pagedir_load_from_swap (t->pagedir, ((uint8_t *) PHYS_BASE) - PGSIZE);
+#endif
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;

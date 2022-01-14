@@ -4,6 +4,10 @@
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
+#ifdef VM
+#include "userprog/pagedir.h"
+#endif /* VM */
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -125,12 +129,7 @@ kill (struct intr_frame *f)
 static void
 page_fault (struct intr_frame *f) 
 {
-  bool not_present;  /* True: not-present page, false: writing r/o page. */
-  bool write;        /* True: access was write, false: access was read. */
-  bool user;         /* True: access by user, false: access by kernel. */
   void *fault_addr;  /* Fault address. */
-
-#if 0
 
   /* Obtain faulting address, the virtual address that was
      accessed to cause the fault.  It may point to code or to
@@ -144,6 +143,17 @@ page_fault (struct intr_frame *f)
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
   intr_enable ();
+
+#ifdef VM
+  if (pagedir_load_from_swap (thread_current ()->pagedir,
+                              pg_round_down (fault_addr)))
+    return;
+#endif /* VM */
+
+#if 0
+  bool not_present;  /* True: not-present page, false: writing r/o page. */
+  bool write;        /* True: access was write, false: access was read. */
+  bool user;         /* True: access by user, false: access by kernel. */
 
   /* Count page faults. */
   page_fault_cnt++;
@@ -163,8 +173,6 @@ page_fault (struct intr_frame *f)
           user ? "user" : "kernel");
   kill (f);
 #else
-  intr_enable ();
-
   if ((f->error_code & PF_U) != 0)
     {
       printf ("Unhandled page fault");

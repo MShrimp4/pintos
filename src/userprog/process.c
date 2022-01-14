@@ -447,7 +447,7 @@ load (char *arg_str, void (**eip) (void), void **esp)
 
 #ifdef VM
   pagedir_save_to_swap (t->pagedir, ((uint8_t *) PHYS_BASE) - PGSIZE);
-  pagedir_load_from_swap (t->pagedir, ((uint8_t *) PHYS_BASE) - PGSIZE);
+  //pagedir_load_from_swap (t->pagedir, ((uint8_t *) PHYS_BASE) - PGSIZE);
 #endif
 
   /* Start address. */

@@ -737,7 +737,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->base_priority = priority;
   t->priority      = PRI_MIN;
-  t->wakeup_time = INT64_MAX; /* Wake me up when September ends */
+  t->wakeup_time   = INT64_MAX; /* Wake me up when September ends */
   list_init (&t->locks);
   if (running_thread () == t) /* initial thread */
     {
@@ -759,6 +759,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->return_val = NULL;
   t->val        = 0;
 #endif /* USERPROG */
+
+#ifdef VM
+  t->esp = NULL;
+#endif /* VM */
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

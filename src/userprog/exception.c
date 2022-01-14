@@ -6,6 +6,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #ifdef VM
+#include "threads/palloc.h"
 #include "userprog/pagedir.h"
 #endif /* VM */
 
@@ -14,6 +15,7 @@ static long long page_fault_cnt;
 
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
+static bool valid_stack_access (void *_addr, void *_esp, void *_eip);
 
 /* Registers handlers for interrupts that can be caused by user
    programs.
@@ -145,9 +147,18 @@ page_fault (struct intr_frame *f)
   intr_enable ();
 
 #ifdef VM
-  if (pagedir_load_from_swap (thread_current ()->pagedir,
-                              pg_round_down (fault_addr)))
+  struct thread *t = thread_current ();
+  void *fpage = pg_round_down (fault_addr);
+  if (pagedir_load_from_swap (thread_current ()->pagedir, fpage))
     return;
+  if (valid_stack_access (fault_addr, t->esp, f->eip))
+    {
+      uint8_t *page = palloc_get_page (PAL_USER | PAL_ZERO);
+      if (page == NULL)
+        PANIC ("Failed to allocate user page");
+      pagedir_set_page (t->pagedir, fpage, page, true);
+      return;
+    }
 #endif /* VM */
 
 #if 0
@@ -185,3 +196,39 @@ page_fault (struct intr_frame *f)
 #endif
 }
 
+static bool
+valid_stack_access (void *_addr, void *_esp, void *_eip)
+{
+  uint8_t *addr = _addr;
+  uint8_t *esp  = _esp;
+  uint8_t *eip  = _eip;
+
+  if (eip == NULL)
+    return false;
+  if (esp <= eip || esp >= (uint8_t *)PHYS_BASE)
+    return false;
+  if (esp <= addr)
+    return true;
+
+  size_t preowned;
+  switch (*eip)
+    {
+    case 0x06:
+    case 0x0E:
+    case 0x0F:
+    case 0x16:
+    case 0x1E:
+    case 0x50 ... 0x57:
+    case 0x68:
+    case 0x6A:
+    case 0xFF:
+      preowned = sizeof (int);
+      break;
+    case 0x60:
+      preowned = 8 * sizeof (int);
+      break;
+    default:
+      preowned = 0;
+    }
+  return (esp - preowned <= addr);
+}

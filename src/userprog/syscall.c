@@ -132,6 +132,9 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
+#ifdef VM
+  thread_current ()->esp = f->esp;
+#endif /* VM */
   uint32_t **esp = (void *) (&f->esp);
   uint32_t sys_num;
 
@@ -183,6 +186,8 @@ syscall_handler (struct intr_frame *f)
     default :
       __exit (-1);
     }
+
+  thread_current ()->esp = NULL;
 }
 
 /* (START) system call wrappers implementation */

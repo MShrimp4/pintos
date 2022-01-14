@@ -445,11 +445,6 @@ load (char *arg_str, void (**eip) (void), void **esp)
   if (!setup_stack (esp, arg_str))
     goto done;
 
-#ifdef VM
-  pagedir_save_to_swap (t->pagedir, ((uint8_t *) PHYS_BASE) - PGSIZE);
-  //pagedir_load_from_swap (t->pagedir, ((uint8_t *) PHYS_BASE) - PGSIZE);
-#endif
-
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 

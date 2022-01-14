@@ -124,6 +124,10 @@ struct thread
     struct return_value *return_val;    /* Pointer of return_value struct */
 #endif
 
+#ifdef VM
+    uint32_t *esp;                      /* ESP storage for page fault*/
+#endif
+
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };

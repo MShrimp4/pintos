@@ -187,7 +187,9 @@ syscall_handler (struct intr_frame *f)
       __exit (-1);
     }
 
+#ifdef VM
   thread_current ()->esp = NULL;
+#endif /* VM */
 }
 
 /* (START) system call wrappers implementation */

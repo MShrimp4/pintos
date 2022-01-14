@@ -15,7 +15,10 @@ static long long page_fault_cnt;
 
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
+
+#ifdef VM
 static bool valid_stack_access (void *_addr, void *_esp, void *_eip);
+#endif /* VM */
 
 /* Registers handlers for interrupts that can be caused by user
    programs.
@@ -196,6 +199,7 @@ page_fault (struct intr_frame *f)
 #endif
 }
 
+#ifdef VM
 static bool
 valid_stack_access (void *_addr, void *_esp, void *_eip)
 {
@@ -238,3 +242,4 @@ valid_stack_access (void *_addr, void *_esp, void *_eip)
     }
   return (esp - preowned <= addr);
 }
+#endif /* VM */

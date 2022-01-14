@@ -43,8 +43,14 @@ pagedir_destroy (uint32_t *pd)
         uint32_t *pte;
         
         for (pte = pt; pte < pt + PGSIZE / sizeof *pte; pte++)
-          if (*pte & PTE_P) 
-            palloc_free_page (pte_get_page (*pte));
+          {
+            if (*pte & PTE_P)
+              palloc_free_page (pte_get_page (*pte));
+#ifdef VM
+            else if (pte_is_swapped (*pte))
+              swap_destroy_page (pte_get_swap_idx (*pte));
+#endif /* VM */
+          }
         palloc_free_page (pt);
       }
   palloc_free_page (pd);

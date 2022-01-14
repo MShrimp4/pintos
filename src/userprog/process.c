@@ -621,6 +621,10 @@ setup_argc_argv (char *page, char *arg_str)
   void *dummy_ptr = (void *) 0xCAFEBABE;
   sptr = push_stack (sptr, &dummy_ptr, sizeof (void *));
 
+  /* Clean up temporary argv space */
+  for (aptr--;aptr >= argv_tmp; aptr--)
+    *aptr = NULL;
+
   return sptr;
 }
 

@@ -102,7 +102,7 @@ swap_load_multiple  (size_t page_idx, void *_pages, size_t page_cnt)
     block_read (swap_device, sector_idx + i, pages + (i * BLOCK_SECTOR_SIZE));
 
   ASSERT (bitmap_all (swap_pool.used_map, page_idx, page_cnt));
-  bitmap_set_multiple (swap_pool.used_map, page_idx, page_cnt, false);
+  swap_destroy_multiple (page_idx, page_cnt);
 }
 
 /* Frees the page at PAGE. */
@@ -110,6 +110,18 @@ void
 swap_load_page      (size_t page_idx, void *page)
 {
   swap_load_multiple (page_idx, page, 1);
+}
+
+void
+swap_destroy_multiple (size_t page_idx, size_t page_count)
+{
+  bitmap_set_multiple (swap_pool.used_map, page_idx, page_count, false);
+}
+
+void
+swap_destroy_page (size_t page_idx)
+{
+  swap_destroy_multiple(page_idx, 1);
 }
 
 bool

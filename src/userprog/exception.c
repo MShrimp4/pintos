@@ -205,10 +205,10 @@ valid_stack_access (void *_addr, void *_esp, void *_eip)
 
   if (eip == NULL)
     return false;
+  /* TODO: Fix this to (OVER BSS) */
   if (addr >= (uint8_t *)PHYS_BASE
       || addr < (uint8_t *)PHYS_BASE - 0x000FFFFF)
     return false;
-  /* TODO: Fix this to (OVER BSS) */
   if (esp > (uint8_t *)PHYS_BASE
       || esp < (uint8_t *)PHYS_BASE - 0x000FFFFF)
     return false;

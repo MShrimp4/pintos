@@ -10,6 +10,10 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 
+#ifdef VM
+#include "vm/mmap.h"
+#endif /* VM */
+
 /* typedefs */
 
 struct user_file
@@ -44,6 +48,12 @@ static void io_close    (int fd);
 
 static void io_deny_write (int fd);
 
+#ifdef VM
+
+static int  io_mmap (int fd, void *addr);
+static void io_munmap (int mid);
+
+#endif /* VM */
 
 /* Internal functions */
 
@@ -212,6 +222,29 @@ static void io_deny_write (int fd)
   file_deny_write (ufile->file);
 }
 
+#ifdef VM
+
+static int
+io_mmap (int fd, void *addr)
+{
+  struct user_file *ufile;
+
+  if (fd < 3)
+    return -1;
+
+  if ((ufile = find_user_file (fd)) == NULL)
+    return -1;
+
+  return mmap (ufile->file, addr);
+}
+
+static void
+io_munmap (int mid)
+{
+  munmap (mid);
+}
+
+#endif /* VM */
 
 
 /* External functions.
@@ -346,5 +379,23 @@ user_io_deny_write (int fd)
 {
   lock_acquire (&io_lock);
   io_deny_write (fd);
+  lock_release (&io_lock);
+}
+
+int
+user_io_mmap (int fd, void *addr)
+{
+  int mid;
+  lock_acquire (&io_lock);
+  mid = io_mmap (fd, addr);
+  lock_release (&io_lock);
+  return mid;
+}
+
+void
+user_io_munmap (int mid)
+{
+  lock_acquire (&io_lock);
+  io_munmap (mid);
   lock_release (&io_lock);
 }

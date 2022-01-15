@@ -126,6 +126,7 @@ struct thread
 
 #ifdef VM
     uint32_t *esp;                      /* ESP storage for page fault*/
+    struct list mmap;                   /* Memory mappings list */
 #endif
 
     /* Owned by thread.c. */

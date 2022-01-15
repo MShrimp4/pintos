@@ -67,7 +67,8 @@ userprog_SRC += userprog/user-io.c	#User I/O
 
 # No virtual memory code yet.
 #vm_SRC = vm/file.c			# Some file.
-vm_SRC = vm/swap-alloc.c                # Swap storage and load
+vm_SRC  = vm/swap-alloc.c               # Swap storage and load
+vm_SRC += vm/mmap.c                     # Memory map
 
 # Filesystem code.
 filesys_SRC  = filesys/filesys.c	# Filesystem core.

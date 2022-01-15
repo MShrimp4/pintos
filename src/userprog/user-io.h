@@ -19,4 +19,9 @@ void user_io_close     (int fd);
 
 void user_io_deny_write (int fd);
 
+#ifdef VM
+int  user_io_mmap (int fd, void *addr);
+void user_io_munmap (int mid);
+#endif /* VM */
+
 #endif /* USERPROG_USER_IO_H */

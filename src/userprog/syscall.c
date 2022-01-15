@@ -43,6 +43,11 @@ static void __seek (int fd, unsigned position);
 static unsigned __tell (int fd);
 static void __close (int fd);
 
+#ifdef VM
+static int  __mmap (int fd, void *addr);
+static void __munmap (int mid);
+#endif /* VM */
+
 /* (END  ) system call wrappers prototype */
 
 static bool
@@ -183,6 +188,14 @@ syscall_handler (struct intr_frame *f)
     case SYS_CLOSE:
       CALL_1 (__close, *esp, int);
       break;
+#ifdef VM
+    case SYS_MMAP:
+      f->eax = CALL_2 (__mmap, *esp, int, void *);
+      break;
+    case SYS_MUNMAP:
+      CALL_1 (__munmap, *esp, int);
+      break;
+#endif /* VM */
     default :
       __exit (-1);
     }
@@ -282,5 +295,20 @@ __close (int fd)
 {
   return user_io_close (fd);
 }
+
+#ifdef VM
+
+static int
+__mmap (int fd, void *addr)
+{
+  return user_io_mmap (fd, addr);
+}
+
+static void
+__munmap (int mid)
+{
+  return user_io_munmap (mid);
+}
+#endif /* VM */
 
 /* (END  ) system call wrappers implementation */

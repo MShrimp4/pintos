@@ -154,6 +154,8 @@ page_fault (struct intr_frame *f)
   void *fpage = pg_round_down (fault_addr);
   if (pagedir_load_from_swap (thread_current ()->pagedir, fpage))
     return;
+  if (pagedir_load_from_mmap (thread_current ()->pagedir, fpage))
+    return;
   if (valid_stack_access (fault_addr, t->esp ? t->esp : f->esp, f->eip))
     {
       uint8_t *page = palloc_get_page (PAL_USER | PAL_ZERO);

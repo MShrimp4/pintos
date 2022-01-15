@@ -61,6 +61,10 @@ static inline uintptr_t pd_no (const void *va) {
 #define PTE_FLAGS 0x00000fff    /* Flag bits. */
 #define PTE_ADDR  0xfffff000    /* Address bits. */
 #define PTE_AVL   0x00000e00    /* Bits available for OS use. */
+#define PTE_SWAP  0x00000200    /* SWAP */
+#define PTE_SHARE 0x00000400    /* Shared memory */
+#define PTE_MMAP  0x00000600    /* Memory mapped file, not loaded */
+#define PTE_ZERO  0x00000800    /* Memory filled with zero, not loaded */
 #define PTE_P 0x1               /* 1=present, 0=not present. */
 #define PTE_W 0x2               /* 1=read/write, 0=read-only. */
 #define PTE_U 0x4               /* 1=user/kernel, 0=kernel only. */
@@ -99,7 +103,11 @@ static inline uint32_t pte_create_user (void *page, bool writable) {
 
 static inline uint32_t pte_set_as_swap (uint32_t pte, size_t swap_idx) {
   ASSERT ((swap_idx << 12) >> 12 == swap_idx);
-  return (swap_idx << 12) | (((pte & ~PTE_ADDR) & ~PTE_P) | PTE_AVL);
+  return (swap_idx << 12) | ((pte & ~PTE_ADDR & ~PTE_P & ~PTE_AVL) | PTE_SWAP);
+}
+
+static inline uint32_t pte_create_mmap (int mid) {
+  return (mid << 12) | PTE_U | PTE_W | PTE_MMAP;
 }
 
 static inline uint32_t pte_set_as_page (uint32_t pte, void *page) {
@@ -112,11 +120,19 @@ static inline size_t pte_get_swap_idx (uint32_t pte) {
 }
 
 static inline bool pte_is_swapped (uint32_t pte) {
-  return (pte & PTE_AVL) && !(pte & PTE_P);
+  return (pte & PTE_AVL) == PTE_SWAP;
+}
+
+static inline bool pte_is_mmapped (uint32_t pte) {
+  return (pte & PTE_AVL) == PTE_MMAP;
+}
+
+static inline bool pte_is_used (uint32_t pte) {
+  return (pte & PTE_AVL) || (pte & PTE_P);
 }
 
 static inline bool pte_is_user (uint32_t pte) {
-  return !!(pte & PTE_U);
+  return (pte & PTE_U) == PTE_U;
 }
 
 /* Returns a pointer to the page that page table entry PTE points

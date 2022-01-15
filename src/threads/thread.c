@@ -761,7 +761,10 @@ init_thread (struct thread *t, const char *name, int priority)
 #endif /* USERPROG */
 
 #ifdef VM
+  /* User ESP on pagefault while handling syscall */
   t->esp = NULL;
+  /* Local memory map management */
+  list_init (&t->mmap);
 #endif /* VM */
 
   old_level = intr_disable ();

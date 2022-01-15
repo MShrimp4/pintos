@@ -1,4 +1,6 @@
 #include "userprog/pagedir.h"
+#include <round.h>
+#include <stdio.h> /* TODO : REMOVE THIS */
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
@@ -7,6 +9,7 @@
 #include "threads/palloc.h"
 #ifdef VM
 #include "vm/swap-alloc.h"
+#include "vm/mmap.h"
 #endif /* VM */
 
 static uint32_t *active_pd (void);
@@ -254,7 +257,70 @@ pagedir_load_from_swap (uint32_t *pd, void *vpage)
   page = palloc_get_page (pte_is_user (*pte) ? PAL_USER : 0);
   *pte = pte_set_as_page (*pte, page);
   swap_load_page (swap, vpage);
+
+  invalidate_pagedir (pd);
   return true;
+}
+
+bool
+pagedir_load_from_mmap (uint32_t *pd, void *vpage)
+{
+  uint32_t *pte = lookup_page (pd, vpage, false);
+  uint32_t *page;
+  mapid_t   mid;
+
+  if (pte == NULL || !pte_is_mmapped (*pte))
+    return false;
+
+  mid  = pte_get_swap_idx (*pte);
+  page = palloc_get_page (PAL_USER | PAL_ZERO);
+  *pte = pte_set_as_page (*pte, page);
+  ASSERT (mmap_load_page (mid, vpage));
+
+  invalidate_pagedir (pd);
+  return true;
+}
+
+bool
+pagedir_setup_mmap (uint32_t *pd,  void *vpage, mapid_t mapid, size_t size)
+{
+  uint8_t *p_addr = vpage;
+
+  if (pg_round_down (vpage) != vpage)
+    return false;
+
+  for (uint8_t *p = p_addr; p < p_addr + ROUND_UP (size, PGSIZE); p += PGSIZE)
+    {
+      uint32_t *pte = lookup_page (pd, p_addr, false);
+      if (pte != NULL && pte_is_used (*pte))
+        return false;
+    }
+
+  for (uint8_t *p = p_addr; p < p_addr + ROUND_UP (size, PGSIZE); p += PGSIZE)
+    {
+      uint32_t *pte = lookup_page (pd, p, true);
+      *pte = pte_create_mmap (mapid);
+    }
+
+  return true;
+}
+
+void
+pagedir_clear_mmap (uint32_t *pd,  void *vpage, size_t size)
+{
+  uint8_t *p_addr = vpage;
+
+  ASSERT (pg_round_down (vpage) == vpage)
+
+  for (uint8_t *p = p_addr; p < p_addr + ROUND_UP (size, PGSIZE); p += PGSIZE)
+    {
+      void *page = pagedir_get_page (pd, p);
+      if (page != NULL)
+        {
+          palloc_free_page (page);
+          pagedir_clear_page(pd, p);
+        }
+    }
 }
 #endif /* VM */
 

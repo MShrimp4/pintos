@@ -64,7 +64,7 @@ static inline uintptr_t pd_no (const void *va) {
 #define PTE_SWAP  0x00000200    /* SWAP */
 #define PTE_SHARE 0x00000400    /* Shared memory */
 #define PTE_MMAP  0x00000600    /* Memory mapped file, not loaded */
-#define PTE_ZERO  0x00000800    /* Memory filled with zero, not loaded */
+#define PTE_BLANK 0x00000800    /* Memory filled with zero, not loaded */
 #define PTE_P 0x1               /* 1=present, 0=not present. */
 #define PTE_W 0x2               /* 1=read/write, 0=read-only. */
 #define PTE_U 0x4               /* 1=user/kernel, 0=kernel only. */
@@ -110,6 +110,10 @@ static inline uint32_t pte_create_mmap (int mid) {
   return (mid << 12) | PTE_U | PTE_W | PTE_MMAP;
 }
 
+static inline uint32_t pte_create_blank (bool writable) {
+  return PTE_U | (writable ? PTE_W : 0) | PTE_BLANK;
+}
+
 static inline uint32_t pte_set_as_page (uint32_t pte, void *page) {
   ASSERT ((pte & PTE_AVL) != 0);
   return vtop (page) | PTE_P | ((pte & ~PTE_ADDR) & ~PTE_AVL);
@@ -125,6 +129,10 @@ static inline bool pte_is_swapped (uint32_t pte) {
 
 static inline bool pte_is_mmapped (uint32_t pte) {
   return (pte & PTE_AVL) == PTE_MMAP;
+}
+
+static inline bool pte_is_blank (uint32_t pte) {
+  return (pte & PTE_AVL) == PTE_BLANK;
 }
 
 static inline bool pte_is_used (uint32_t pte) {

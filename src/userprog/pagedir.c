@@ -7,12 +7,14 @@
 #include "threads/pte.h"
 #include "threads/palloc.h"
 #ifdef VM
+#include "threads/thread.h"
 #include "vm/swap-alloc.h"
 #include "vm/mmap.h"
 #endif /* VM */
 
 static uint32_t *active_pd (void);
 static void invalidate_pagedir (uint32_t *);
+static void *evict_page (uint32_t *pd, void *esp);
 
 /* Creates a new page directory that has mappings for kernel
    virtual addresses, but none for user virtual addresses.
@@ -236,10 +238,12 @@ pagedir_save_to_swap (uint32_t *pd, const void *vpage)
   ASSERT (pte != NULL && !pte_is_swapped (*pte));
 
   page = pte_get_page (*pte);
-  swap = swap_store_page (vpage);
+  swap = swap_store_page (page);
   ASSERT (swap_is_valid (swap));
   palloc_free_page (page);
   *pte = pte_set_as_swap (*pte, swap);
+
+  invalidate_pagedir (pd);
 }
 
 bool
@@ -254,19 +258,65 @@ pagedir_load_from_swap (uint32_t *pd, void *vpage)
 
   swap = pte_get_swap_idx (*pte);
   page = palloc_get_page (pte_is_user (*pte) ? PAL_USER : 0);
+  if (page == NULL)
+    page = evict_page (pd, NULL);
   *pte = pte_set_as_page (*pte, page);
-  swap_load_page (swap, vpage);
+  swap_load_page (swap, page);
 
   invalidate_pagedir (pd);
   return true;
 }
 
+static void *
+evict_page (uint32_t *pd, void *esp)
+{
+  uint8_t *page;
+
+  start_interthread_action ();
+  while ((page = palloc_get_page (PAL_USER | PAL_ZERO)) == NULL)
+    {
+      void *alive  = NULL;
+      void *unused = NULL;
+      for (uint8_t *p = (uint8_t *)PHYS_BASE - PGSIZE;
+           p >= (uint8_t *)pg_round_down (esp);
+           p -= PGSIZE)
+        {
+          uint32_t *pte = lookup_page (pd, p, false);
+          if (pte != NULL && (*pte & PTE_P))
+            {
+              if (alive == NULL)
+                alive = p;
+              if (!(*pte & PTE_A))
+                {
+                  unused = p;
+                  break;
+                }
+              else if (!(*pte & PTE_D) && unused == NULL)
+                unused = p;
+              else
+                *pte = *pte & ~PTE_A & ~PTE_D;
+            }
+        }
+      if (unused == NULL)
+        unused = alive;
+      if (unused != NULL)
+        pagedir_save_to_swap (pd, unused);
+      else
+        PANIC ("Failed to allocate user memory");
+
+      invalidate_pagedir (pd);
+    }
+  end_interthread_action ();
+
+  return page;
+}
+
 void
-pagedir_add_stack (uint32_t *pd, void *vpage, void *esp)
+pagedir_add_blank (uint32_t *pd, void *vpage, void *esp)
 {
   uint8_t *page = palloc_get_page (PAL_USER | PAL_ZERO);
   if (page == NULL)
-    PANIC ("Failed to allocate user page");
+    page = evict_page (pd, esp);
   pagedir_set_page (pd, vpage, page, true);
 }
 
@@ -330,6 +380,20 @@ pagedir_clear_mmap (uint32_t *pd,  void *vpage, size_t size)
     }
 
   invalidate_pagedir (pd);
+}
+
+bool
+pagedir_is_blank (uint32_t *pd, void *vpage)
+{
+  uint32_t *pte = lookup_page (pd, vpage, false);
+  return pte != NULL && pte_is_blank (*pte);
+}
+
+void
+pagedir_set_blank (uint32_t *pd, void *vpage, bool writable)
+{
+  uint32_t *pte = lookup_page (pd, vpage, true);
+  *pte = pte_create_blank (writable);
 }
 
 #endif /* VM */

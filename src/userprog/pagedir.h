@@ -20,12 +20,15 @@ void pagedir_activate (uint32_t *pd);
 void pagedir_save_to_swap   (uint32_t *pd, const void *vpage);
 bool pagedir_load_from_swap (uint32_t *pd, void *vpage);
 bool pagedir_load_from_mmap (uint32_t *pd, void *vpage);
-void pagedir_add_stack      (uint32_t *pd, void *vpage,
+void pagedir_add_blank      (uint32_t *pd, void *vpage,
                              void *esp);
 bool pagedir_setup_mmap     (uint32_t *pd, void *vpage,
                              mapid_t mapid, size_t size);
-void pagedir_clear_mmap     (uint32_t *pd,  void *vpage,
+void pagedir_clear_mmap     (uint32_t *pd, void *vpage,
                              size_t size);
+bool pagedir_is_blank       (uint32_t *pd, void *vpage);
+void pagedir_set_blank      (uint32_t *pd, void *vpage,
+                             bool writable);
 #endif /* VM */
 
 #endif /* userprog/pagedir.h */

@@ -156,9 +156,10 @@ page_fault (struct intr_frame *f)
     return;
   if (pagedir_load_from_mmap (thread_current ()->pagedir, fpage))
     return;
-  if (valid_stack_access (fault_addr, t->esp ? t->esp : f->esp, f->eip))
+  if (valid_stack_access (fault_addr, t->esp ? t->esp : f->esp, f->eip)
+      || pagedir_is_blank (thread_current ()->pagedir, fpage))
     {
-      pagedir_add_stack (t->pagedir, fpage, t->esp ? t->esp : f->esp);
+      pagedir_add_blank (t->pagedir, fpage, t->esp ? t->esp : f->esp);
       return;
     }
 #endif /* VM */

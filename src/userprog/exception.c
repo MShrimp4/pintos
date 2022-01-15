@@ -158,10 +158,7 @@ page_fault (struct intr_frame *f)
     return;
   if (valid_stack_access (fault_addr, t->esp ? t->esp : f->esp, f->eip))
     {
-      uint8_t *page = palloc_get_page (PAL_USER | PAL_ZERO);
-      if (page == NULL)
-        PANIC ("Failed to allocate user page");
-      pagedir_set_page (t->pagedir, fpage, page, true);
+      pagedir_add_stack (t->pagedir, fpage, t->esp ? t->esp : f->esp);
       return;
     }
 #endif /* VM */

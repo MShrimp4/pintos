@@ -82,7 +82,7 @@ FAIL tests/vm/page-merge-mm
 pass tests/vm/page-shuffle
 pass tests/vm/mmap-read
 pass tests/vm/mmap-close
-FAIL tests/vm/mmap-unmap
+pass tests/vm/mmap-unmap
 pass tests/vm/mmap-overlap
 pass tests/vm/mmap-twice
 pass tests/vm/mmap-write
@@ -111,4 +111,4 @@ pass tests/filesys/base/sm-seq-random
 pass tests/filesys/base/syn-read
 pass tests/filesys/base/syn-remove
 pass tests/filesys/base/syn-write
-7 of 113 tests failed.
+6 of 113 tests failed.

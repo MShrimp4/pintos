@@ -261,6 +261,15 @@ pagedir_load_from_swap (uint32_t *pd, void *vpage)
   return true;
 }
 
+void
+pagedir_add_stack (uint32_t *pd, void *vpage, void *esp)
+{
+  uint8_t *page = palloc_get_page (PAL_USER | PAL_ZERO);
+  if (page == NULL)
+    PANIC ("Failed to allocate user page");
+  pagedir_set_page (pd, vpage, page, true);
+}
+
 bool
 pagedir_load_from_mmap (uint32_t *pd, void *vpage)
 {

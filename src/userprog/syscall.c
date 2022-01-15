@@ -307,7 +307,7 @@ __mmap (int fd, void *addr)
 static void
 __munmap (int mid)
 {
-  return user_io_munmap (mid);
+  user_io_munmap (mid);
 }
 #endif /* VM */
 

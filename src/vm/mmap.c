@@ -54,9 +54,9 @@ static void
 free_mmap (struct mmap *mmap)
 {
   struct thread *t = thread_current ();
-  size_t fsize;
+  size_t _fsize = file_length (mmap->file);
 
-  fsize = file_length (mmap->file);
+  size_t fsize = _fsize;
   for (uint8_t *page = mmap->base;
        (size_t) (page - mmap->base) < ROUND_UP (fsize, PGSIZE);
        page += PGSIZE, fsize -= PGSIZE)
@@ -67,7 +67,7 @@ free_mmap (struct mmap *mmap)
           file_write (mmap->file, page, (fsize < PGSIZE) ? fsize : PGSIZE);
         }
     }
-  pagedir_clear_mmap (t->pagedir, mmap->base, fsize);
+  pagedir_clear_mmap (t->pagedir, mmap->base, _fsize);
   file_close (mmap->file);
   list_remove (&mmap->elem);
   free (mmap);

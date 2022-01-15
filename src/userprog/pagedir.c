@@ -1,6 +1,5 @@
 #include "userprog/pagedir.h"
 #include <round.h>
-#include <stdio.h> /* TODO : REMOVE THIS */
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
@@ -302,6 +301,7 @@ pagedir_setup_mmap (uint32_t *pd,  void *vpage, mapid_t mapid, size_t size)
       *pte = pte_create_mmap (mapid);
     }
 
+  invalidate_pagedir (pd);
   return true;
 }
 
@@ -310,18 +310,19 @@ pagedir_clear_mmap (uint32_t *pd,  void *vpage, size_t size)
 {
   uint8_t *p_addr = vpage;
 
-  ASSERT (pg_round_down (vpage) == vpage)
+  ASSERT (pg_round_down (vpage) == vpage);
 
   for (uint8_t *p = p_addr; p < p_addr + ROUND_UP (size, PGSIZE); p += PGSIZE)
     {
       void *page = pagedir_get_page (pd, p);
       if (page != NULL)
-        {
-          palloc_free_page (page);
-          pagedir_clear_page(pd, p);
-        }
+        palloc_free_page (page);
+      *lookup_page (pd, p, true) = 0;
     }
+
+  invalidate_pagedir (pd);
 }
+
 #endif /* VM */
 
 /* Loads page directory PD into the CPU's page directory base

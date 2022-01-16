@@ -52,6 +52,10 @@ static inline void *pg_round_down (const void *va) {
    virtual address space belongs to the kernel. */
 #define	PHYS_BASE ((void *) LOADER_PHYS_BASE)
 
+#define EXEC_BASE ((void *) 0x08048000)
+#define MAX_STACK_SIZE (1 << 23)
+#define STACK_BASE ((uint8_t *)PHYS_BASE - MAX_STACK_SIZE)
+
 /* Returns true if VADDR is a user virtual address. */
 static inline bool
 is_user_vaddr (const void *vaddr) 

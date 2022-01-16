@@ -14,7 +14,6 @@
 
 static uint32_t *active_pd (void);
 static void invalidate_pagedir (uint32_t *);
-static void *evict_page (uint32_t *pd, void *esp);
 
 /* Creates a new page directory that has mappings for kernel
    virtual addresses, but none for user virtual addresses.
@@ -258,8 +257,6 @@ pagedir_load_from_swap (uint32_t *pd, void *vpage)
 
   swap = pte_get_swap_idx (*pte);
   page = palloc_get_page (pte_is_user (*pte) ? PAL_USER : 0);
-  if (page == NULL)
-    page = evict_page (pd, NULL);
   *pte = pte_set_as_page (*pte, page);
   swap_load_page (swap, page);
 
@@ -267,56 +264,94 @@ pagedir_load_from_swap (uint32_t *pd, void *vpage)
   return true;
 }
 
-static void *
-evict_page (uint32_t *pd, void *esp)
+void
+pagedir_evict_page (uint32_t *pd, void *esp)
 {
-  uint8_t *page;
-
-  start_interthread_action ();
-  while ((page = palloc_get_page (PAL_USER | PAL_ZERO)) == NULL)
+  /* Free invalid stack page */
+  for (uint8_t *p = STACK_BASE;
+       p < (uint8_t *)pg_round_down (esp);
+       p += PGSIZE)
     {
-      void *alive  = NULL;
-      void *unused = NULL;
-      for (uint8_t *p = (uint8_t *)PHYS_BASE - PGSIZE;
-           p >= (uint8_t *)pg_round_down (esp);
-           p -= PGSIZE)
+      uint32_t *pte = lookup_page(pd, p, false);
+
+      if (pte_is_swapped (*pte))
         {
-          uint32_t *pte = lookup_page (pd, p, false);
-          if (pte != NULL && (*pte & PTE_P))
-            {
-              if (alive == NULL)
-                alive = p;
-              if (!(*pte & PTE_A))
-                {
-                  unused = p;
-                  break;
-                }
-              else if (!(*pte & PTE_D) && unused == NULL)
-                unused = p;
-              else
-                *pte = *pte & ~PTE_A & ~PTE_D;
-            }
+          swap_destroy_page (pte_get_swap_idx (*pte));
+          *pte = 0;
         }
-      if (unused == NULL)
-        unused = alive;
-      if (unused != NULL)
-        pagedir_save_to_swap (pd, unused);
-      else
-        PANIC ("Failed to allocate user memory");
+      else if (*pte & PTE_A)
+        palloc_free_page (pte_get_page (*pte));
 
-      invalidate_pagedir (pd);
+      *pte = *pte & !PTE_P;
+      return;
     }
-  end_interthread_action ();
 
-  return page;
+  void *alive     = NULL;
+  void *unvisited = NULL;
+  void *unwritten = NULL;
+
+  /* Swap stack page */
+  for (uint8_t *p = (uint8_t *)pg_round_down (esp);
+       p < (uint8_t *)PHYS_BASE;
+       p += PGSIZE)
+    {
+      uint32_t *pte = lookup_page (pd, p, false);
+      if (pte != NULL && (*pte & PTE_P))
+        {
+          if (!(*pte & PTE_A))
+            unvisited = p;
+          else if (!(*pte & PTE_D))
+            unwritten = p;
+          else
+            alive = p;
+          *pte = *pte & ~PTE_A & ~PTE_D;
+        }
+    }
+
+  if (unvisited != NULL)
+    {
+      pagedir_save_to_swap (pd, unvisited);
+      return;
+    }
+
+  /* Swap program area */
+  for (uint8_t *p = (uint8_t *)EXEC_BASE; ;p += PGSIZE)
+    {
+      uint32_t *pte = lookup_page (pd, p, false);
+      if (pte == NULL || !pte_is_used (*pte))
+        break;
+      if (!(*pte & PTE_P)) //|| !(*pte & PTE_W))
+        continue;
+
+      alive = p;
+      if (!(*pte & PTE_A))
+        unvisited = p;
+      *pte = *pte & ~PTE_A;
+    }
+
+  if (unvisited != NULL)
+    {
+      pagedir_save_to_swap (pd, unvisited);
+      return;
+    }
+  if (unwritten != NULL)
+    {
+      pagedir_save_to_swap (pd, unwritten);
+      return;
+    }
+  if (alive != NULL)
+    {
+      pagedir_save_to_swap (pd, alive);
+      return;
+    }
 }
 
 void
-pagedir_add_blank (uint32_t *pd, void *vpage, void *esp)
+pagedir_add_blank (uint32_t *pd, void *vpage)
 {
   uint8_t *page = palloc_get_page (PAL_USER | PAL_ZERO);
   if (page == NULL)
-    page = evict_page (pd, esp);
+    PANIC ("Failed to allocate stack memory");
   pagedir_set_page (pd, vpage, page, true);
 }
 

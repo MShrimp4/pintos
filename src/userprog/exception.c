@@ -159,7 +159,7 @@ page_fault (struct intr_frame *f)
   if (valid_stack_access (fault_addr, t->esp ? t->esp : f->esp, f->eip)
       || pagedir_is_blank (thread_current ()->pagedir, fpage))
     {
-      pagedir_add_blank (t->pagedir, fpage, t->esp ? t->esp : f->esp);
+      pagedir_add_blank (t->pagedir, fpage);
       return;
     }
 #endif /* VM */
@@ -211,10 +211,10 @@ valid_stack_access (void *_addr, void *_esp, void *_eip)
     return false;
   /* TODO: Fix this to (OVER BSS) */
   if (addr >= (uint8_t *)PHYS_BASE
-      || addr < (uint8_t *)PHYS_BASE - 0x000FFFFF)
+      || addr < STACK_BASE)
     return false;
   if (esp > (uint8_t *)PHYS_BASE
-      || esp < (uint8_t *)PHYS_BASE - 0x000FFFFF)
+      || esp < STACK_BASE)
     return false;
 
   if (esp <= addr)

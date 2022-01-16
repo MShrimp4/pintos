@@ -11,6 +11,12 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 
+#ifdef VM
+#include "threads/thread.h"
+#include "threads/interrupt.h"
+#include "userprog/pagedir.h"
+#endif /* VM */
+
 /* Page allocator.  Hands out memory in page-size (or
    page-multiple) chunks.  See malloc.h for an allocator that
    hands out smaller chunks.
@@ -39,6 +45,22 @@ static struct pool kernel_pool, user_pool;
 static void init_pool (struct pool *, void *base, size_t page_cnt,
                        const char *name);
 static bool page_from_pool (const struct pool *, void *page);
+
+#ifdef VM
+static thread_action_func evict_page;
+
+static void
+evict_page (struct thread *t, void *_cur)
+{
+  if ((void *)t == _cur)
+    return;
+
+  pagedir_evict_page (t->pagedir, t->stack);
+
+  /* pagedir operations mess up the pagedir*/
+  pagedir_activate (t->pagedir);
+}
+#endif /* VM */
 
 /* Initializes the page allocator.  At most USER_PAGE_LIMIT
    pages are put into the user pool. */
@@ -81,6 +103,29 @@ palloc_get_multiple (enum palloc_flags flags, size_t page_cnt)
   page_idx = bitmap_scan_and_flip (pool->used_map, 0, page_cnt, false);
   lock_release (&pool->lock);
 
+#ifdef VM
+  struct thread *t = thread_current ();
+
+  if (page_idx == BITMAP_ERROR)
+    {
+      pagedir_evict_page (t->pagedir, t->esp ? ((void *)t-> esp) : ((void *)STACK_BASE));
+
+      lock_acquire (&pool->lock);
+      page_idx = bitmap_scan_and_flip (pool->used_map, 0, page_cnt, false);
+      lock_release (&pool->lock);
+    }
+  if (page_idx == BITMAP_ERROR)
+    {
+      enum intr_level old_level = intr_disable ();
+      thread_foreach (evict_page, (void *) t);
+      intr_set_level (old_level);
+
+      lock_acquire (&pool->lock);
+      page_idx = bitmap_scan_and_flip (pool->used_map, 0, page_cnt, false);
+      lock_release (&pool->lock);
+    }
+#endif
+
   if (page_idx != BITMAP_ERROR)
     pages = pool->base + PGSIZE * page_idx;
   else
@@ -93,7 +138,7 @@ palloc_get_multiple (enum palloc_flags flags, size_t page_cnt)
     }
   else 
     {
-      if (flags & PAL_ASSERT)
+      //TODO //if (flags & PAL_ASSERT)
         PANIC ("palloc_get: out of pages");
     }
 

@@ -58,7 +58,7 @@ free_mmap (struct mmap *mmap)
 
   size_t fsize = _fsize;
   for (uint8_t *page = mmap->base;
-       (size_t) (page - mmap->base) < ROUND_UP (fsize, PGSIZE);
+       (size_t) (page - mmap->base) < ROUND_UP (_fsize, PGSIZE);
        page += PGSIZE, fsize -= PGSIZE)
     {
       if (pagedir_is_dirty (t->pagedir, page))

@@ -20,10 +20,10 @@ static void syscall_handler (struct intr_frame *);
 
 /* (START) Memory sanity check functions */
 static int   get_user (const uint8_t *uaddr);
-static bool  put_user (uint8_t *udst, uint8_t byte) UNUSED;
+static bool  put_user (uint8_t *udst, uint8_t byte);
 static bool  try_movl  (const uint32_t *src, uint32_t *dest);
 static void *safe_movl (const uint32_t *src);
-static void  assert_arr_sanity (const uint8_t *arr, unsigned size);
+static void  assert_arr_sanity (const uint8_t *arr, unsigned size, bool w);
 static void  assert_str_sanity (const char *str);
 /* (END  ) Memory sanity check functions */
 
@@ -100,9 +100,14 @@ put_user (uint8_t *udst, uint8_t byte)
 }
 
 static void
-assert_arr_sanity (const uint8_t *arr, unsigned size)
+assert_arr_sanity (const uint8_t *arr, unsigned size, bool w)
 {
   if (arr == NULL)
+    __exit (-1);
+
+  if (w &&
+         (!put_user ((void *)arr,           (uint8_t) 0)
+       || !put_user ((void *)(arr +size-1), (uint8_t) 0)))
     __exit (-1);
 
   if (get_user ((void *)arr) == -1 || get_user ((void *)(arr +size-1)) == -1)
@@ -265,7 +270,10 @@ __filesize (int fd)
 static int
 __read (int fd, void *buffer, unsigned length)
 {
-  assert_arr_sanity (buffer, length);
+  if (length == 0)
+    return 0;
+
+  assert_arr_sanity (buffer, length, true);
 
   return user_io_read (fd, buffer, length);
 }
@@ -273,7 +281,7 @@ __read (int fd, void *buffer, unsigned length)
 static int
 __write (int fd, const void *buffer, unsigned size)
 {
-  assert_arr_sanity (buffer, size);
+  assert_arr_sanity (buffer, size, false);
 
   return user_io_write (fd, buffer, size);
 }

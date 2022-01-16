@@ -20,9 +20,9 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "vm/mmap.h"
 
 #ifdef VM
+#include "vm/mmap.h"
 #include "vm/swap-alloc.h"
 #endif
 
@@ -228,7 +228,9 @@ process_exit (void)
   free_subthread_list (cur);
   mark_exit_on_return_value (cur);
   user_io_close_all ();
+#ifdef VM
   mmap_close_all ();
+#endif /* VM */
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

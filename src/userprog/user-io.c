@@ -382,6 +382,7 @@ user_io_deny_write (int fd)
   lock_release (&io_lock);
 }
 
+#ifdef VM
 int
 user_io_mmap (int fd, void *addr)
 {
@@ -399,3 +400,4 @@ user_io_munmap (int mid)
   io_munmap (mid);
   lock_release (&io_lock);
 }
+#endif /* VM */
